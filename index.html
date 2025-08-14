@@ -86,26 +86,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script src="https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js"></script>
 
-<style>
-/* === Mobile Camera FAB & Modal (additive, non-breaking) === */
-.fab-scan {
-  position: fixed; right: 16px; bottom: 18px; z-index: 70;
-  padding: 14px 16px; border: 0; border-radius: 999px;
-  background: linear-gradient(90deg, var(--brand,#2563eb), var(--brand2,#38bdf8));
-  color: #fff; font-weight: 800; box-shadow: 0 10px 20px rgba(2,6,23,.25);
-  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
-}
-.fab-scan i { font-size: 18px; }
-#mdlScan .box { width: min(92vw, 680px); }
-#scanViewport { position: relative; width: 100%; aspect-ratio: 3 / 4; background: #000; border-radius: 12px; overflow: hidden; }
-#scanVideo { width: 100%; height: 100%; object-fit: cover; }
-.scan-bar {
-  display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px;
-}
-.scan-bar .btn { font-size: 14px; }
-.scan-result { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-weight: 800; }
-</style>
-
 </head>
 <body>
 <header>
@@ -534,53 +514,41 @@ if(window.__DEV_TEST__) runTests();
 })(); // IIFE yalnız sonda
 </script>
 
-<!-- === Mobile Camera Scanner (additive) === -->
+<button id="btnScan" class="btn primary" style="font-size:16px; padding:8px 12px; display:inline-flex; gap:6px; align-items:center;">
+  <i class="fa-solid fa-camera"></i> Kamera ile Oku
+</button>
+
+
+<!-- Scan Modal -->
 <div id="mdlScan" class="modal">
   <div class="box">
     <h3>Mobil Barkod Okuma</h3>
-    <div id="scanViewport">
-      <video id="scanVideo" autoplay muted playsinline></video>
+    <div id="scanViewport" style="width:100%; aspect-ratio:3/4; background:#000; border-radius:8px;">
+      <video id="scanVideo" autoplay muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>
     </div>
-    <div class="scan-bar">
-      <div class="mini">Son okunan: <span id="scanOut" class="scan-result">—</span></div>
-      <div style="display:flex; gap:8px">
-        <button id="btnScanSwitch" class="btn neutral"><i class="fa-solid fa-camera-rotate"></i> Kamera Değiştir</button>
-        <button id="btnScanClose" class="btn danger"><i class="fa-solid fa-xmark"></i> Kapat</button>
+    <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+      <span>Son okunan: <b id="scanOut">—</b></span>
+      <div style="display:flex; gap:6px;">
+        <button id="btnScanSwitch" class="btn">Kamera Değiştir</button>
+        <button id="btnScanClose" class="btn danger">Kapat</button>
       </div>
     </div>
   </div>
 </div>
-<button id="btnScan" class="fab-scan" title="Kamerayla okut">
-  <i class="fa-solid fa-camera"></i> Kamera ile Oku
-</button>
 
 <script>
 (function(){
-  // Guard: ZXing available?
-  const hasZX = !!(window.ZXing || (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader));
-  if(!hasZX){ console.warn('ZXing yüklenemedi'); return; }
-
-  const $ = (id)=>document.getElementById(id);
+  const $ = id => document.getElementById(id);
   const btnScan = $('btnScan'), mdlScan = $('mdlScan'), btnScanClose = $('btnScanClose'), btnScanSwitch = $('btnScanSwitch');
-  const vid = $('scanVideo'), out = $('scanOut'), inpBarcode = $('inpBarcode');
+  const vid = $('scanVideo'), out = $('scanOut'), inpBarcode = document.querySelector('input[id*="barkod" i]') || document.querySelector('input[name*="barkod" i]');
 
   let reader = null, devices = [], curDeviceId = null, running = false;
-  const PrefsKey = 'etiket_last_camera_id';
 
   async function listCams(){
-    try{
-      devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
-      // Persisted preferred device?
-      const pref = localStorage.getItem(PrefsKey);
-      if(pref && devices.some(d=>d.deviceId===pref)) curDeviceId = pref;
-      // Prefer back camera if no pref
-      if(!curDeviceId){
-        const back = devices.find(d => /back|arka|environment/i.test(d.label));
-        curDeviceId = (back && back.deviceId) || (devices[0] && devices[0].deviceId) || null;
-      }
-    }catch(e){ console.error(e); }
+    devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
+    const back = devices.find(d => /back|arka|environment/i.test(d.label));
+    curDeviceId = (back && back.deviceId) || (devices[0] && devices[0].deviceId) || null;
   }
-
   async function start(){
     if(running) return;
     if(!reader) reader = new ZXingBrowser.BrowserMultiFormatReader();
@@ -588,68 +556,33 @@ if(window.__DEV_TEST__) runTests();
     mdlScan.classList.add('shown');
     running = true;
     try{
-      await reader.decodeFromVideoDevice(curDeviceId, vid, (result, err, controls)=>{
+      await reader.decodeFromVideoDevice(curDeviceId, vid, (result, err)=>{
         if(result){
-          const txt = (result.text || '').replace(/\D/g, '');
-          if(txt){
-            out.textContent = txt;
-            // Push to existing search flow without mutating app logic
+          const txt = (result.text||'').trim();
+          out.textContent = txt;
+          if(inpBarcode){
             inpBarcode.value = txt;
             inpBarcode.dispatchEvent(new Event('input', {bubbles:true}));
-            // Optional UX: brief vibrate if available
-            if(navigator.vibrate) navigator.vibrate([80]);
-            // Keep scanning for continuous flow; no auto-close to allow çoklu okutma
           }
+          if(navigator.vibrate) navigator.vibrate(60);
         }
-        // errors are expected during scanning; ignore
       });
-    }catch(e){
-      console.error('decodeFromVideoDevice hata:', e);
-      alert('Kamera açılamadı. Tarayıcı izinlerini kontrol edin.');
-      stop();
-    }
+    }catch(e){ console.error(e); stop(); }
   }
-
-  async function stop(){
-    if(reader){
-      try{ await reader.reset(); }catch(e){}
-    }
-    running = false;
-    mdlScan.classList.remove('shown');
+  function stop(){
+    if(reader) try{ reader.reset(); }catch(e){}
+    running = false; mdlScan.classList.remove('shown');
     out.textContent = '—';
   }
-
   btnScan && btnScan.addEventListener('click', start);
   btnScanClose && btnScanClose.addEventListener('click', stop);
-
   btnScanSwitch && btnScanSwitch.addEventListener('click', async ()=>{
-    if(!devices || devices.length < 2) { alert('Başka kamera bulunamadı'); return; }
+    if(!devices.length) return;
     const idx = devices.findIndex(d => d.deviceId === curDeviceId);
-    const next = devices[(idx + 1) % devices.length];
-    curDeviceId = next.deviceId;
-    localStorage.setItem(PrefsKey, curDeviceId);
-    if(running){
-      try{
-        await reader.reset();
-        await reader.decodeFromVideoDevice(curDeviceId, vid, (result)=>{ 
-          if(result){
-            const txt = (result.text || '').replace(/\D/g,'');
-            if(txt){
-              out.textContent = txt;
-              inpBarcode.value = txt;
-              inpBarcode.dispatchEvent(new Event('input', {bubbles:true}));
-              if(navigator.vibrate) navigator.vibrate([80]);
-            }
-          }
-        });
-      }catch(e){ console.error(e); }
-    }
+    const next = devices[(idx+1)%devices.length];
+    curDeviceId = next.deviceId; if(running) { stop(); start(); }
   });
-
-  // Safety: stop on unload / ESC
   window.addEventListener('beforeunload', stop);
-  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && running) stop(); });
-
 })();
 </script>
 
