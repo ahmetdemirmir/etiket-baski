@@ -1,4 +1,11 @@
 <!DOCTYPE html>
+<!-- Additive Top Quick Bar -->
+<div id="topQuickActions">
+  <div class="wrap">
+    <button id="btnTopUpload"><i class="fa-solid fa-file-arrow-up"></i> Dosya Yükle</button>
+  </div>
+</div>
+
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
@@ -86,6 +93,31 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 <!-- Camera/Barcode libs (additive) -->
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+
+<style>
+/* === Additive Top Quick Bar (mobile friendly) === */
+#topQuickActions{
+  position: sticky; top: 0; z-index: 60; width: 100%;
+  background: linear-gradient(90deg, var(--brand,#0a66c2), #22c1c3);
+  color: #fff; box-shadow: 0 6px 16px rgba(2,6,23,.15); 
+}
+#topQuickActions .wrap{
+  display:flex; align-items:center; justify-content:flex-start; gap:10px;
+  padding: 10px 12px;
+}
+#btnTopUpload{
+  display:inline-flex; align-items:center; gap:8px; 
+  font-weight:700; border:0; border-radius:999px; cursor:pointer;
+  padding:10px 14px; background: rgba(255,255,255,.15); color:#fff;
+  backdrop-filter: blur(4px);
+}
+#btnTopUpload:active{ transform: translateY(1px); }
+@media (min-width: 768px){
+  #topQuickActions .wrap{ padding: 12px 16px; }
+  #btnTopUpload{ padding: 10px 16px; }
+}
+</style>
 
 </head>
 <body>
@@ -700,6 +732,33 @@ if(window.__DEV_TEST__) runTests();
   // Safety: stop when page is hidden/unloaded
   document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopScan(); });
   window.addEventListener('beforeunload', stopScan);
+})();
+</script>
+
+
+<script>
+(function(){
+  function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+  ready(function(){
+    const topBtn = document.getElementById('btnTopUpload');
+    if(!topBtn) return;
+    // Find the primary file input (closest to user flow)
+    const fileInputs = Array.from(document.querySelectorAll('input[type="file"]'));
+    if(!fileInputs.length){
+      topBtn.disabled = true; topBtn.title = 'Dosya yükleme alanı bulunamadı';
+      return;
+    }
+    const primaryFileInput = fileInputs[0];
+    // Ensure the input is interactable programmatically
+    topBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      try{
+        primaryFileInput.click();
+      }catch(err){
+        console.warn('File input click failed:', err);
+      }
+    }, false);
+  });
 })();
 </script>
 
