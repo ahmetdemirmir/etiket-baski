@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -36,7 +35,6 @@ header img{height:42px} header h1{margin:0;font-size:1.2rem;font-weight:800}
 .btn.neutral{background:#fff;border:1px solid var(--line);color:#0f172a}
 .btn.danger{background:linear-gradient(90deg,#b91c1c,#ef4444);color:#fff}
 .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:#0b3ea9;padding:7px 10px;border-radius:999px;font-size:12px}
-#reader{width:100%;max-width:540px;margin:10px auto;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
 small.hint{display:block;color:var(--muted);margin-top:6px}
 
 /* sonuç listesi */
@@ -95,8 +93,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   <div class="card">
     <div class="control" style="justify-content:space-between">
       <div class="control">
-        <button id="btnStartCam" class="btn primary"><i class="fa-solid fa-camera"></i> Kamerayı Aç</button>
-        <button id="btnStopCam" class="btn danger" disabled><i class="fa-solid fa-stop"></i> Kamerayı Kapat</button>
         <span id="badgeData" class="badge"><i class="fa-solid fa-database"></i> Veri yüklenmedi</span>
         <label class="switch"><input id="toggleFx" type="checkbox" checked><span class="slider"></span><span class="switchLabel">Ses/Titreşim</span></label>
       </div>
@@ -106,14 +102,12 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       </div>
     </div>
 
-    <div id="reader" aria-label="kamera"></div>
-
     <div class="control" style="margin-top:8px">
       <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off">
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off">
       <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
     </div>
-    <small class="hint">Kamera açıkken giriş alanları <b>kilitlidir</b>. Manuel arama için kamerayı kapatın.</small>
+    <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; ürünü seçip sepete ekleyin.</small>
   </div>
 </div>
 
@@ -195,7 +189,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 (function () {
 /* ===== STATE ===== */
 let PRODUCTS=[]; let CART=JSON.parse(localStorage.getItem('etiket_cart')||'[]'); let LAST_RESULTS=[];
-const cam={running:false,obj:null}; let FX=JSON.parse(localStorage.getItem('etiket_fx')||'true');
+let FX=JSON.parse(localStorage.getItem('etiket_fx')||'true');
 const IS_DESKTOP = window.matchMedia('(pointer: fine)').matches && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 let __docLabels=null, __docOld=null, __urlLabels=null, __urlOld=null;
 
@@ -208,10 +202,10 @@ const fmtTRY=new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maxi
 const monthsDiff=(d)=>((new Date())-d)/(1000*60*60*24*30);
 const showToast=(msg)=>{const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);};
 const beep=(ok=true)=>{ if(!FX) return; try{const a=new (window.AudioContext||window.webkitAudioContext)();const o=a.createOscillator();o.type='sine';o.frequency.value=ok?880:220;const g=a.createGain();g.gain.setValueAtTime(0.04,a.currentTime);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+0.12);}catch(e){} if(navigator.vibrate) navigator.vibrate(ok?[100]:[80,60,80]); };
-const refocusAfterAction=(clear=false)=>{ if(IS_DESKTOP && !cam.running){ if(clear){ inpBarcode.value=''; inpName.value=''; } inpBarcode.focus(); inpBarcode.select(); } };
+const refocusAfterAction=(clear=false)=>{ if(IS_DESKTOP){ if(clear){ inpBarcode.value=''; inpName.value=''; } inpBarcode.focus(); inpBarcode.select(); } };
 
-/* normalizasyon yardımcıları */
-const normKey=(s)=>String(s||'').toLowerCase().replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+/* normalizasyon yardımcıları (aynı) */
+const normKey=(s)=>String(s||'').toLowerCase().replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
 const fromSci=(str)=>{const m=String(str).toLowerCase().match(/^(\d+(?:\.\d+)?)e\+(\d+)$/);if(!m) return String(str);const d=m[1].replace('.','');const dec=(m[1].split('.')[1]||'').length;const exp=+m[2];return d+'0'.repeat(Math.max(0,exp-dec));};
 function parseBarcode(v){ if(v===undefined||v===null)return''; if(typeof v==='number'){const s=String(v);return s.includes('e+')?fromSci(s).replace(/\D/g,''):s.replace(/\D/g,'');} const s=String(v).trim(); if(/e\+\d+$/i.test(s)) return fromSci(s).replace(/\D/g,''); return s.replace(/[^0-9]/g,''); }
 function parsePrice(v){ if(v===undefined||v===null||v==='')return 0; if(typeof v==='number')return v; const s=String(v).replace(/[₺\s]/g,'').replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return Number.isNaN(n)?0:n; }
@@ -245,21 +239,10 @@ function isOld(p){ return p.priceDate ? monthsDiff(new Date(p.priceDate))>6 : fa
 function showResults(title,arr){ LAST_RESULTS=arr; $('mFilter').textContent=title; $('mCount').textContent=arr.length; const L=$('mList'); L.innerHTML=''; arr.slice(0,200).forEach(p=>{ const li=document.createElement('div'); li.className='item'; li.innerHTML=`<div><div class="nm">${p.name}</div><div class="bc">${p.barcode}</div></div><div>${isOld(p)?'<span class="tag-old">Eski fiyat</span>':''}<span style="font-weight:900;margin-left:8px">${fmtTRY.format(p.price)}</span></div>`; li.onclick=()=>{ $('mdlSearch').classList.remove('shown'); openProduct(p); }; L.appendChild(li); }); $('mdlSearch').classList.add('shown'); }
 function filterByName(q){ const s=q.trim().toLowerCase(); if(s.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=>p.name.toLowerCase().includes(s)); if(res.length) showResults(`Ad: "${q}"`,res); else $('mdlSearch').classList.remove('shown'); }
 function filterByLast6(v){ const t=v.replace(/\D/g,''); if(t.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=>p.barcode.endsWith(t)); if(res.length) showResults(`Barkod son: ${t}`,res); else $('mdlSearch').classList.remove('shown'); }
-inpName.addEventListener('input', ()=>{ if(!cam.running) filterByName(inpName.value); });
-inpBarcode.addEventListener('input', ()=>{ if(!cam.running) filterByLast6(inpBarcode.value); });
+inpName.addEventListener('input', ()=>{ filterByName(inpName.value); });
+inpBarcode.addEventListener('input', ()=>{ filterByLast6(inpBarcode.value); });
 ['inpName','inpBarcode'].forEach(id=>$(id).addEventListener('keydown',e=>{ if(e.key==='Enter'&&LAST_RESULTS.length){ openProduct(LAST_RESULTS[0]); $('mdlSearch').classList.remove('shown'); }}));
 $('btnSearchClose').addEventListener('click', ()=> $('mdlSearch').classList.remove('shown'));
-
-/* ===== CAMERA ===== */
-function lockInputs(s){ [inpBarcode,inpName].forEach(i=>{ i.readOnly=s; if(s) i.blur(); }); }
-$('btnStartCam').addEventListener('click', async ()=>{ try{ await Html5Qrcode.getCameras(); }catch(_){}
-  const cfg={fps:10, qrbox:{width:260,height:120}, aspectRatio:4/3};
-  const onSuccess=(txt)=>{ if(/^[0-9]{6,}$/.test(txt)){ const p=PRODUCTS.find(x=>x.barcode===txt||x.barcode.endsWith(txt.slice(-6))); if(p){ beep(true); openProduct(p); } } };
-  const h=new Html5Qrcode('reader'); h.start({facingMode:'environment'},cfg,onSuccess,()=>{})
-   .then(()=>{ cam.obj=h; cam.running=true; $('btnStartCam').disabled=true; $('btnStopCam').disabled=false; lockInputs(true); })
-   .catch(()=> alert('Kamera açılamadı. Manuel arama ile devam edin.'));
-});
-$('btnStopCam').addEventListener('click', ()=>{ if(cam.obj){ cam.obj.stop().then(()=>{ cam.obj.clear(); cam.obj=null; cam.running=false; $('btnStartCam').disabled=false; $('btnStopCam').disabled=true; lockInputs(false); }); } });
 
 /* ===== PRODUCT POPUP & CART ===== */
 const mdl=$('mdlProduct');
@@ -279,7 +262,7 @@ function addToCart(p,qty,isOld){
   setCart(CART);
   mdl.classList.remove('shown');
   beep(true);
-  refocusAfterAction(true);   // PC: barkod alanını temizle + odakla; mobil: klavye açılmaz
+  refocusAfterAction(true);
 }
 
 /* ===== CART MODAL ===== */
@@ -336,7 +319,7 @@ const labelCSS = `
   height: 100%;
 }
 .etiket-stokadi {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   color: #2e2e2e;
   line-height: 1.1;
@@ -371,14 +354,14 @@ const labelCSS = `
 }
 .etiket-barkod {
   width: 72px;
-  height: 40px;
+  height: 45px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
 }
 .etiket-barkod img {
   width: 100%;
-  height: 40px;
+  height: 36px;
   object-fit: contain;
 }
 
@@ -389,16 +372,16 @@ function buildLabelNode(it) {
   const fmt = /^[0-9]{13}$/.test(it.barcode) ? 'EAN13' : 'CODE128';
   JsBarcode(canvas, it.barcode, {
     format: fmt,
-    height: 30,
-    width: 1.4,
+    height: 44,          // daha yüksek çizgi
+    width: 2,            // daha kalın modül
     displayValue: true,
     font: 'Arial',
-    fontSize: 9,
-    textMargin: 1,
+    fontSize: 12,        // barkod altı metin daha büyük
+    textMargin: 2,
     margin: 0,
-    lineColor: '#111'
+    lineColor: '#000'
   });
-  const barPng = canvas.toDataURL('image/png');
+  const barPng = canvas.toDataURL('image/png'); // lossless
   const priceStr = fmtTRY.format(it.price).replace('₺','');
 
   const wrap = document.createElement('div'); 
@@ -467,8 +450,9 @@ async function makeLabelsDoc(){
       }
     }
     work.appendChild(page);
-    const canvas=await html2canvas(page,{scale:5,useCORS:true,allowTaint:true,background:'#fff'}); const img=canvas.toDataURL('imageJPEG',1.0);
-    if(pg>0) doc.addPage(); doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
+    const canvas=await html2canvas(page,{scale:6,useCORS:true,allowTaint:true,background:'#fff'}); 
+    const img=canvas.toDataURL('image/png'); // PNG ile keskin çizgiler
+    if(pg>0) doc.addPage(); doc.addImage(img,'PNG',margin,margin,A4W-margin*2,A4H-margin*2);
   }
 
   const total=CART.reduce((a,x)=>a+x.qty,0), oldCount=CART.reduce((a,x)=>a+(x.isOld?x.qty:0),0);
@@ -489,10 +473,10 @@ async function makeOldListDoc(){
     const no=document.createElement('div'); no.textContent='Eski fiyatlı ürün bulunmadı.'; list.appendChild(no);
   }
   old.forEach(it=>{
-    // Sağ tarafa ADET yerine BARKOD ÇİZGİLERİ
+    // Sağ tarafa barkod çizgileri
     const cvs=document.createElement('canvas');
     const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
-    JsBarcode(cvs,it.barcode,{format:fmt,height:32,displayValue:false,margin:0,lineColor:'#111',width:1.6});
+    JsBarcode(cvs,it.barcode,{format:fmt,height:36,displayValue:false,margin:0,lineColor:'#000',width:2});
     const png=cvs.toDataURL('image/png');
 
     const row=document.createElement('div');
@@ -500,15 +484,16 @@ async function makeOldListDoc(){
     const left=document.createElement('div');
     left.innerHTML=`<div style="font-weight:800">${it.name}</div><div style="color:#475569;font-family:Arial">${it.barcode}</div>`;
     const right=document.createElement('div');
-    right.innerHTML=`<img src="${png}" alt="barkod" style="height:32px">`;
+    right.innerHTML=`<img src="${png}" alt="barkod" style="height:36px">`;
 
     row.appendChild(left); row.appendChild(right); list.appendChild(row);
   });
   wrap.appendChild(list);
 
   $('work').innerHTML=''; $('work').appendChild(wrap);
-  const canvas=await html2canvas(wrap,{scale:5,useCORS:true,allowTaint:true,background:'#fff'}); const img=canvas.toDataURL('imageJPEG',1.0);
-  doc.addImage(img,'JPEG',5,5,200,287);
+  const canvas=await html2canvas(wrap,{scale:6,useCORS:true,allowTaint:true,background:'#fff'}); 
+  const img=canvas.toDataURL('image/png');
+  doc.addImage(img,'PNG',5,5,200,287);
   return doc;
 }
 
