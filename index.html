@@ -83,8 +83,9 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .pdfFrame{flex:1;border:1px solid var(--line);border-radius:8px}
 </style>
 
+<!-- Camera/Barcode libs (additive) -->
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
-<script src="https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
 </head>
 <body>
@@ -109,7 +110,11 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     <div class="control" style="margin-top:8px">
       <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off">
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off">
-      <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
+      \1
+<button id="btnScan" class="btn" style="margin-left:8px;display:inline-flex;align-items:center;gap:6px;padding:8px 12px;">
+  <i class="fa-solid fa-camera"></i> Kamera ile Oku
+</button>
+
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; ürünü seçip sepete ekleyin.</small>
   </div>
@@ -514,21 +519,18 @@ if(window.__DEV_TEST__) runTests();
 })(); // IIFE yalnız sonda
 </script>
 
-<button id="btnScan" class="btn primary" style="font-size:16px; padding:8px 12px; display:inline-flex; gap:6px; align-items:center;">
-  <i class="fa-solid fa-camera"></i> Kamera ile Oku
-</button>
-
-
-<!-- Scan Modal -->
-<div id="mdlScan" class="modal">
-  <div class="box">
+<!-- Minimal Scanner Modal (additive; no global layout change) -->
+<div id="mdlScan" class="modal" style="display:none;">
+  <div class="box" style="width:min(92vw,640px);">
     <h3>Mobil Barkod Okuma</h3>
-    <div id="scanViewport" style="width:100%; aspect-ratio:3/4; background:#000; border-radius:8px;">
-      <video id="scanVideo" autoplay muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+    <div style="position:relative;width:100%;aspect-ratio:3/4;background:#000;border-radius:10px;overflow:hidden;">
+      <video id="scanVideo" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>
+      <canvas id="scanCanvas" style="display:none;"></canvas>
     </div>
-    <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
-      <span>Son okunan: <b id="scanOut">—</b></span>
-      <div style="display:flex; gap:6px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;">
+      <div>Son okunan: <b id="scanOut">—</b></div>
+      <div style="display:flex;gap:8px;">
+        <button id="btnTorch" class="btn">Flaş</button>
         <button id="btnScanSwitch" class="btn">Kamera Değiştir</button>
         <button id="btnScanClose" class="btn danger">Kapat</button>
       </div>
@@ -538,51 +540,166 @@ if(window.__DEV_TEST__) runTests();
 
 <script>
 (function(){
-  const $ = id => document.getElementById(id);
-  const btnScan = $('btnScan'), mdlScan = $('mdlScan'), btnScanClose = $('btnScanClose'), btnScanSwitch = $('btnScanSwitch');
-  const vid = $('scanVideo'), out = $('scanOut'), inpBarcode = document.querySelector('input[id*="barkod" i]') || document.querySelector('input[name*="barkod" i]');
+  const $ = s => document.querySelector(s);
+  const btnScan = $('#btnScan');
+  const mdl = $('#mdlScan');
+  const vid = $('#scanVideo');
+  const cvs = $('#scanCanvas');
+  const ctx = cvs.getContext('2d');
+  const out = $('#scanOut');
+  const btnClose = $('#btnScanClose');
+  const btnSwitch = $('#btnScanSwitch');
+  const btnTorch = $('#btnTorch');
 
-  let reader = null, devices = [], curDeviceId = null, running = false;
+  // Locate a probable barkod input without changing existing code
+  const barkodInput =
+    document.querySelector('input[id*="barkod" i]') ||
+    document.querySelector('input[name*="barkod" i]') ||
+    document.querySelector('input[placeholder*="barkod" i]') ||
+    document.querySelector('input[type="search"]') ||
+    document.querySelector('input[type="text"]');
 
-  async function listCams(){
-    devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
-    const back = devices.find(d => /back|arka|environment/i.test(d.label));
-    curDeviceId = (back && back.deviceId) || (devices[0] && devices[0].deviceId) || null;
+  let stream = null, currentDeviceId = null, devices = [], usingBarcodeDetector = 'BarcodeDetector' in window;
+  let track = null, torchOn = false;
+  let rafId = null;
+
+  async function listCameras(){
+    const md = navigator.mediaDevices;
+    if(!md || !md.enumerateDevices) return [];
+    const devs = await md.enumerateDevices();
+    return devs.filter(d => d.kind === 'videoinput');
   }
-  async function start(){
-    if(running) return;
-    if(!reader) reader = new ZXingBrowser.BrowserMultiFormatReader();
-    await listCams();
-    mdlScan.classList.add('shown');
-    running = true;
+
+  async function openCamera(deviceId){
+    const constraints = {
+      audio: false,
+      video: {
+        facingMode: deviceId ? undefined : { ideal: 'environment' },
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        width: { ideal: 1280 }, height: { ideal: 720 },
+        focusMode: 'continuous'
+      }
+    };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    vid.srcObject = stream;
+    await vid.play();
+
+    track = stream.getVideoTracks()[0];
+    currentDeviceId = track.getSettings().deviceId || deviceId || null;
+
+    // canvas match
+    cvs.width = vid.videoWidth || 640;
+    cvs.height = vid.videoHeight || 480;
+  }
+
+  async function startScan(){
+    // Permissions must be user-gesture triggered
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      alert('Tarayıcınız kamera erişimini desteklemiyor.');
+      return;
+    }
+    devices = await listCameras();
     try{
-      await reader.decodeFromVideoDevice(curDeviceId, vid, (result, err)=>{
-        if(result){
-          const txt = (result.text||'').trim();
-          out.textContent = txt;
-          if(inpBarcode){
-            inpBarcode.value = txt;
-            inpBarcode.dispatchEvent(new Event('input', {bubbles:true}));
+      await openCamera(currentDeviceId);
+    }catch(e){
+      console.warn('Kamera açılamadı, tekrar deniyorum:', e);
+      // Retry without deviceId
+      try { await openCamera(null); }
+      catch(e2){ console.error('Kamera başarısız:', e2); alert('Kamera açılamadı. İzinleri ve HTTPS bağlantısını kontrol edin.'); return; }
+    }
+    mdl.style.display = 'block';
+    out.textContent = '—';
+    torchOn = false;
+
+    if(usingBarcodeDetector){
+      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','upc_a','qr_code'] });
+      const loop = async ()=>{
+        try{
+          const bitmap = await createImageBitmap(vid);
+          const codes = await detector.detect(bitmap);
+          if(codes && codes.length){
+            onCode(codes[0].rawValue || codes[0].value || '');
           }
-          if(navigator.vibrate) navigator.vibrate(60);
-        }
+        }catch(err){}
+        rafId = requestAnimationFrame(loop);
+      };
+      rafId = requestAnimationFrame(loop);
+    }else if(window.ZXing && ZXing.BrowserMultiFormatReader){
+      // ZXing fallback
+      const reader = new ZXing.BrowserMultiFormatReader();
+      reader.decodeFromVideoElementContinuously(vid, (result, err)=>{
+        if(result && result.text){ onCode(result.text); }
       });
-    }catch(e){ console.error(e); stop(); }
+      // keep reference to stop on close
+      vid._zxingReader = reader;
+    }else if(window.jsQR){
+      // jsQR fallback via canvas
+      const loop = ()=>{
+        try{
+          ctx.drawImage(vid, 0, 0, cvs.width, cvs.height);
+          const img = ctx.getImageData(0,0,cvs.width,cvs.height);
+          const qr = jsQR(img.data, img.width, img.height);
+          if(qr && qr.data){ onCode(qr.data); }
+        }catch(err){}
+        rafId = requestAnimationFrame(loop);
+      };
+      rafId = requestAnimationFrame(loop);
+    }else{
+      alert('Uygun barkod kütüphanesi bulunamadı.');
+    }
   }
-  function stop(){
-    if(reader) try{ reader.reset(); }catch(e){}
-    running = false; mdlScan.classList.remove('shown');
+
+  function stopScan(){
+    if(rafId) cancelAnimationFrame(rafId), rafId = null;
+    if(vid._zxingReader){ try{ vid._zxingReader.reset(); }catch(e){} }
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
+      stream = null; track = null;
+    }
+    mdl.style.display = 'none';
     out.textContent = '—';
   }
-  btnScan && btnScan.addEventListener('click', start);
-  btnScanClose && btnScanClose.addEventListener('click', stop);
-  btnScanSwitch && btnScanSwitch.addEventListener('click', async ()=>{
+
+  function onCode(txt){
+    if(!txt) return;
+    out.textContent = txt;
+    if(barkodInput){
+      barkodInput.value = txt;
+      barkodInput.dispatchEvent(new Event('input', {bubbles:true}));
+      barkodInput.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+    if(navigator.vibrate) navigator.vibrate(60);
+    // Do not auto-close; continuous reading is expected
+  }
+
+  // Torch toggle if supported
+  async function toggleTorch(){
+    if(!track) return alert('Kamera açık değil.');
+    const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+    if(!('torch' in capabilities)) { alert('Cihaz flaşı desteklemiyor.'); return; }
+    torchOn = !torchOn;
+    try{
+      await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+    }catch(e){ console.warn('Torch apply failed', e); }
+  }
+
+  // Wire up UI
+  btnScan && btnScan.addEventListener('click', startScan, { once:false });
+  $('#btnScanClose')?.addEventListener('click', stopScan);
+  $('#btnScanSwitch')?.addEventListener('click', async ()=>{
+    if(!devices || !devices.length){ devices = await listCameras(); }
     if(!devices.length) return;
-    const idx = devices.findIndex(d => d.deviceId === curDeviceId);
-    const next = devices[(idx+1)%devices.length];
-    curDeviceId = next.deviceId; if(running) { stop(); start(); }
+    const idx = devices.findIndex(d=>d.deviceId===currentDeviceId);
+    const next = devices[(idx+1) % devices.length];
+    stopScan();
+    currentDeviceId = next.deviceId;
+    startScan();
   });
-  window.addEventListener('beforeunload', stop);
+  $('#btnTorch')?.addEventListener('click', toggleTorch);
+
+  // Safety: stop when page is hidden/unloaded
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopScan(); });
+  window.addEventListener('beforeunload', stopScan);
 })();
 </script>
 
