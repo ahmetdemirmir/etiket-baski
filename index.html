@@ -1,11 +1,4 @@
 <!DOCTYPE html>
-<!-- Additive Top Quick Bar -->
-<div id="topQuickActions">
-  <div class="wrap">
-    <button id="btnTopUpload"><i class="fa-solid fa-file-arrow-up"></i> Dosya Yükle</button>
-  </div>
-</div>
-
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
@@ -90,37 +83,34 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .pdfFrame{flex:1;border:1px solid var(--line);border-radius:8px}
 </style>
 
-<!-- Camera/Barcode libs (additive) -->
+<!-- Additive camera libs -->
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+<script src="https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
 
 <style>
-/* === Additive Top Quick Bar (mobile friendly) === */
-#topQuickActions{
-  position: sticky; top: 0; z-index: 60; width: 100%;
-  background: linear-gradient(90deg, var(--brand,#0a66c2), #22c1c3);
-  color: #fff; box-shadow: 0 6px 16px rgba(2,6,23,.15); 
-}
-#topQuickActions .wrap{
-  display:flex; align-items:center; justify-content:flex-start; gap:10px;
-  padding: 10px 12px;
-}
-#btnTopUpload{
-  display:inline-flex; align-items:center; gap:8px; 
-  font-weight:700; border:0; border-radius:999px; cursor:pointer;
+/* Additive top action bar (non-intrusive) */
+#dgTopBar{ width:100%; background: linear-gradient(90deg, var(--brand, #0a66c2), #22c1c3); color:#fff; box-shadow: 0 6px 16px rgba(2,6,23,.12); }
+#dgTopBar .wrap{ display:flex; align-items:center; gap:10px; padding:10px 12px; }
+#dgTopUpload, #dgTopScan{
+  display:inline-flex; align-items:center; gap:8px; font-weight:700; border:0; border-radius:999px; cursor:pointer;
   padding:10px 14px; background: rgba(255,255,255,.15); color:#fff;
-  backdrop-filter: blur(4px);
 }
-#btnTopUpload:active{ transform: translateY(1px); }
-@media (min-width: 768px){
-  #topQuickActions .wrap{ padding: 12px 16px; }
-  #btnTopUpload{ padding: 10px 16px; }
-}
+#dgTopUpload:active, #dgTopScan:active{ transform: translateY(1px); }
 </style>
 
 </head>
 <body>
+
+<!-- Additive Top Bar -->
+<div id="dgTopBar">
+  <div class="wrap">
+    <button id="dgTopUpload"><i class="fa-solid fa-file-arrow-up"></i> Dosya Yükle</button>
+    <button id="dgTopScan"><i class="fa-solid fa-camera"></i> Kamera ile Oku</button>
+  </div>
+</div>
+
 <header>
   <img src="logo.png" alt="Logo">
   <h1>Fiyat Gör Etiket Bas</h1>
@@ -142,11 +132,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     <div class="control" style="margin-top:8px">
       <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off">
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off">
-      \1
-<button id="btnScan" class="btn" style="margin-left:8px;display:inline-flex;align-items:center;gap:6px;padding:8px 12px;">
-  <i class="fa-solid fa-camera"></i> Kamera ile Oku
-</button>
-
+      <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; ürünü seçip sepete ekleyin.</small>
   </div>
@@ -551,214 +537,211 @@ if(window.__DEV_TEST__) runTests();
 })(); // IIFE yalnız sonda
 </script>
 
-<!-- Minimal Scanner Modal (additive; no global layout change) -->
-<div id="mdlScan" class="modal" style="display:none;">
-  <div class="box" style="width:min(92vw,640px);">
-    <h3>Mobil Barkod Okuma</h3>
+<!-- Additive Mobile Scanner Modal -->
+<div id="dgScanModal" style="position:fixed;inset:0;display:none;place-items:center;background:rgba(2,6,23,.45);backdrop-filter:blur(2px);z-index:9999;padding:16px;">
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 18px 36px rgba(2,6,23,.2);padding:12px;width:min(92vw,640px);">
+    <h3 style="margin:6px 0 10px;font-family:system-ui,Segoe UI,Roboto,Arial;font-weight:800;">Mobil Barkod Okuma</h3>
     <div style="position:relative;width:100%;aspect-ratio:3/4;background:#000;border-radius:10px;overflow:hidden;">
-      <video id="scanVideo" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>
-      <canvas id="scanCanvas" style="display:none;"></canvas>
+      <video id="dgScanVideo" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>
+      <canvas id="dgScanCanvas" style="display:none;"></canvas>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;">
-      <div>Son okunan: <b id="scanOut">—</b></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;font-family:system-ui,Segoe UI,Roboto,Arial;">
+      <div>Son okunan: <b id="dgScanOut">—</b></div>
       <div style="display:flex;gap:8px;">
-        <button id="btnTorch" class="btn">Flaş</button>
-        <button id="btnScanSwitch" class="btn">Kamera Değiştir</button>
-        <button id="btnScanClose" class="btn danger">Kapat</button>
+        <button id="dgBtnTorch" style="padding:8px 12px;border-radius:10px;border:0;background:#e2e8f0;color:#0f172a;font-weight:700;">Flaş</button>
+        <button id="dgBtnSwitch" style="padding:8px 12px;border-radius:10px;border:0;background:#e2e8f0;color:#0f172a;font-weight:700;">Kamera Değiştir</button>
+        <button id="dgBtnClose" style="padding:8px 12px;border-radius:10px;border:0;background:#dc2626;color:#fff;font-weight:700;">Kapat</button>
       </div>
     </div>
   </div>
 </div>
 
+
 <script>
 (function(){
-  const $ = s => document.querySelector(s);
-  const btnScan = $('#btnScan');
-  const mdl = $('#mdlScan');
-  const vid = $('#scanVideo');
-  const cvs = $('#scanCanvas');
+  function $(sel){ return document.querySelector(sel); }
+  function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
+
+  // === Upload button wiring ===
+  const topUpload = $('#dgTopUpload');
+  if (topUpload){
+    topUpload.addEventListener('click', function(e){
+      e.preventDefault();
+      const inputs = $all('input[type="file"]:not([disabled])');
+      if (!inputs.length){ alert('Sayfada dosya yükleme alanı bulunamadı.'); return; }
+      const el = inputs[0];
+
+      // iOS/WebKit: click() only if element is not display:none
+      const cs = window.getComputedStyle(el);
+      let restore = null;
+      if (cs.display === 'none' || cs.visibility === 'hidden'){
+        restore = {
+          display: el.style.display, visibility: el.style.visibility,
+          position: el.style.position, left: el.style.left,
+          width: el.style.width, height: el.style.height,
+          opacity: el.style.opacity, zIndex: el.style.zIndex
+        };
+        el.style.display = 'block';
+        el.style.visibility = 'visible';
+        el.style.position = 'fixed';
+        el.style.left = '-9999px';
+        el.style.width = '1px';
+        el.style.height = '1px';
+        el.style.opacity = '0.01';
+        el.style.zIndex = '10000';
+      }
+      try { el.click(); }
+      catch(err){ console.warn('File input click failed:', err); alert('Dosya seçici açılamadı. Tarayıcı izinlerini kontrol edin.'); }
+      finally {
+        if (restore){
+          el.style.display = restore.display;
+          el.style.visibility = restore.visibility;
+          el.style.position = restore.position;
+          el.style.left = restore.left;
+          el.style.width = restore.width;
+          el.style.height = restore.height;
+          el.style.opacity = restore.opacity;
+          el.style.zIndex = restore.zIndex;
+        }
+      }
+    });
+  }
+
+  // === Camera scanner wiring ===
+  const openScanBtn = $('#dgTopScan');
+  const mdl = $('#dgScanModal');
+  const vid = $('#dgScanVideo');
+  const cvs = $('#dgScanCanvas');
   const ctx = cvs.getContext('2d');
-  const out = $('#scanOut');
-  const btnClose = $('#btnScanClose');
-  const btnSwitch = $('#btnScanSwitch');
-  const btnTorch = $('#btnTorch');
+  const out = $('#dgScanOut');
+  const btnClose = $('#dgBtnClose');
+  const btnSwitch = $('#dgBtnSwitch');
+  const btnTorch = $('#dgBtnTorch');
 
-  // Locate a probable barkod input without changing existing code
-  const barkodInput =
-    document.querySelector('input[id*="barkod" i]') ||
-    document.querySelector('input[name*="barkod" i]') ||
-    document.querySelector('input[placeholder*="barkod" i]') ||
-    document.querySelector('input[type="search"]') ||
-    document.querySelector('input[type="text"]');
+  // Try to find an existing "barkod" input in user's page
+  const barkodInput = document.querySelector('input[id*="barkod" i], input[name*="barkod" i], input[placeholder*="barkod" i], input[aria-label*="barkod" i]') 
+                      || document.querySelector('input[type="search"]');
 
-  let stream = null, currentDeviceId = null, devices = [], usingBarcodeDetector = 'BarcodeDetector' in window;
-  let track = null, torchOn = false;
-  let rafId = null;
+  let stream=null, currentDeviceId=null, devices=[], usingBD = ('BarcodeDetector' in window);
+  let track=null, torchOn=false; let rafId=null;
 
   async function listCameras(){
-    const md = navigator.mediaDevices;
-    if(!md || !md.enumerateDevices) return [];
+    const md = navigator.mediaDevices; if(!md || !md.enumerateDevices) return [];
     const devs = await md.enumerateDevices();
-    return devs.filter(d => d.kind === 'videoinput');
+    return devs.filter(d=> d.kind === 'videoinput');
   }
 
   async function openCamera(deviceId){
     const constraints = {
-      audio: false,
-      video: {
-        facingMode: deviceId ? undefined : { ideal: 'environment' },
+      audio:false,
+      video:{
+        facingMode: deviceId ? undefined : { ideal:'environment' },
         deviceId: deviceId ? { exact: deviceId } : undefined,
-        width: { ideal: 1280 }, height: { ideal: 720 },
-        focusMode: 'continuous'
+        width: { ideal: 1280 }, height: { ideal: 720 }
       }
     };
     stream = await navigator.mediaDevices.getUserMedia(constraints);
-    vid.srcObject = stream;
-    await vid.play();
-
+    vid.srcObject = stream; await vid.play();
     track = stream.getVideoTracks()[0];
     currentDeviceId = track.getSettings().deviceId || deviceId || null;
-
-    // canvas match
-    cvs.width = vid.videoWidth || 640;
-    cvs.height = vid.videoHeight || 480;
-  }
-
-  async function startScan(){
-    // Permissions must be user-gesture triggered
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      alert('Tarayıcınız kamera erişimini desteklemiyor.');
-      return;
-    }
-    devices = await listCameras();
-    try{
-      await openCamera(currentDeviceId);
-    }catch(e){
-      console.warn('Kamera açılamadı, tekrar deniyorum:', e);
-      // Retry without deviceId
-      try { await openCamera(null); }
-      catch(e2){ console.error('Kamera başarısız:', e2); alert('Kamera açılamadı. İzinleri ve HTTPS bağlantısını kontrol edin.'); return; }
-    }
-    mdl.style.display = 'block';
-    out.textContent = '—';
-    torchOn = false;
-
-    if(usingBarcodeDetector){
-      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','upc_a','qr_code'] });
-      const loop = async ()=>{
-        try{
-          const bitmap = await createImageBitmap(vid);
-          const codes = await detector.detect(bitmap);
-          if(codes && codes.length){
-            onCode(codes[0].rawValue || codes[0].value || '');
-          }
-        }catch(err){}
-        rafId = requestAnimationFrame(loop);
-      };
-      rafId = requestAnimationFrame(loop);
-    }else if(window.ZXing && ZXing.BrowserMultiFormatReader){
-      // ZXing fallback
-      const reader = new ZXing.BrowserMultiFormatReader();
-      reader.decodeFromVideoElementContinuously(vid, (result, err)=>{
-        if(result && result.text){ onCode(result.text); }
-      });
-      // keep reference to stop on close
-      vid._zxingReader = reader;
-    }else if(window.jsQR){
-      // jsQR fallback via canvas
-      const loop = ()=>{
-        try{
-          ctx.drawImage(vid, 0, 0, cvs.width, cvs.height);
-          const img = ctx.getImageData(0,0,cvs.width,cvs.height);
-          const qr = jsQR(img.data, img.width, img.height);
-          if(qr && qr.data){ onCode(qr.data); }
-        }catch(err){}
-        rafId = requestAnimationFrame(loop);
-      };
-      rafId = requestAnimationFrame(loop);
-    }else{
-      alert('Uygun barkod kütüphanesi bulunamadı.');
-    }
-  }
-
-  function stopScan(){
-    if(rafId) cancelAnimationFrame(rafId), rafId = null;
-    if(vid._zxingReader){ try{ vid._zxingReader.reset(); }catch(e){} }
-    if(stream){
-      stream.getTracks().forEach(t=>t.stop());
-      stream = null; track = null;
-    }
-    mdl.style.display = 'none';
-    out.textContent = '—';
+    cvs.width = vid.videoWidth || 640; cvs.height = vid.videoHeight || 480;
   }
 
   function onCode(txt){
     if(!txt) return;
     out.textContent = txt;
-    if(barkodInput){
+    if (barkodInput){
       barkodInput.value = txt;
-      barkodInput.dispatchEvent(new Event('input', {bubbles:true}));
-      barkodInput.dispatchEvent(new Event('change', {bubbles:true}));
+      barkodInput.dispatchEvent(new Event('input',{bubbles:true}));
+      barkodInput.dispatchEvent(new Event('change',{bubbles:true}));
     }
-    if(navigator.vibrate) navigator.vibrate(60);
-    // Do not auto-close; continuous reading is expected
+    if (navigator.vibrate) navigator.vibrate(60);
   }
 
-  // Torch toggle if supported
+  async function startScan(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      alert('Tarayıcınız kamera erişimini desteklemiyor.');
+      return;
+    }
+    devices = await listCameras();
+    try { await openCamera(currentDeviceId); }
+    catch(e){
+      try { await openCamera(null); }
+      catch(e2){ console.error(e2); alert('Kamera açılamadı. HTTPS ve izinleri kontrol edin.'); return; }
+    }
+    mdl.style.display = 'grid';
+    out.textContent = '—'; torchOn = false;
+
+    if (usingBD){
+      const detector = new BarcodeDetector({ formats:['ean_13','ean_8','code_128','upc_a','qr_code'] });
+      const loop = async ()=>{
+        try{
+          const bitmap = await createImageBitmap(vid);
+          const codes = await detector.detect(bitmap);
+          if (codes && codes.length){ onCode(codes[0].rawValue || codes[0].value || ''); }
+        }catch(_){}
+        rafId = requestAnimationFrame(loop);
+      };
+      rafId = requestAnimationFrame(loop);
+    } else if (window.ZXingBrowser && ZXingBrowser.BrowserMultiFormatReader){
+      const reader = new ZXingBrowser.BrowserMultiFormatReader();
+      reader.decodeFromVideoElementContinuously(vid, (result, err)=>{
+        if (result && result.text){ onCode(result.text); }
+      });
+      vid._zxingReader = reader;
+    } else if (window.ZXing && ZXing.BrowserMultiFormatReader){
+      const reader = new ZXing.BrowserMultiFormatReader();
+      reader.decodeFromVideoElementContinuously(vid, (result, err)=>{
+        if (result && result.text){ onCode(result.text); }
+      });
+      vid._zxingReader = reader;
+    } else if (window.jsQR){
+      const loop = ()=>{
+        try{
+          ctx.drawImage(vid,0,0,cvs.width,cvs.height);
+          const img = ctx.getImageData(0,0,cvs.width,cvs.height);
+          const qr = jsQR(img.data, img.width, img.height);
+          if (qr && qr.data){ onCode(qr.data); }
+        }catch(_){}
+        rafId = requestAnimationFrame(loop);
+      };
+      rafId = requestAnimationFrame(loop);
+    } else {
+      alert('Uygun barkod kütüphanesi bulunamadı.');
+    }
+  }
+
+  function stopScan(){
+    if (rafId) cancelAnimationFrame(rafId), rafId=null;
+    if (vid._zxingReader){ try{ vid._zxingReader.reset(); }catch(_){ } }
+    if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; track=null; }
+    mdl.style.display = 'none';
+    out.textContent = '—';
+  }
+
   async function toggleTorch(){
     if(!track) return alert('Kamera açık değil.');
-    const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-    if(!('torch' in capabilities)) { alert('Cihaz flaşı desteklemiyor.'); return; }
-    torchOn = !torchOn;
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if(!('torch' in caps)) { alert('Cihaz flaşı desteklemiyor.'); return; }
     try{
-      await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+      await track.applyConstraints({ advanced:[{ torch: !torchOn }] });
+      torchOn = !torchOn;
     }catch(e){ console.warn('Torch apply failed', e); }
   }
 
-  // Wire up UI
-  btnScan && btnScan.addEventListener('click', startScan, { once:false });
-  $('#btnScanClose')?.addEventListener('click', stopScan);
-  $('#btnScanSwitch')?.addEventListener('click', async ()=>{
+  openScanBtn && openScanBtn.addEventListener('click', startScan);
+  btnClose && btnClose.addEventListener('click', stopScan);
+  btnSwitch && btnSwitch.addEventListener('click', async ()=>{
     if(!devices || !devices.length){ devices = await listCameras(); }
     if(!devices.length) return;
-    const idx = devices.findIndex(d=>d.deviceId===currentDeviceId);
+    const idx = devices.findIndex(d=> d.deviceId === currentDeviceId);
     const next = devices[(idx+1) % devices.length];
-    stopScan();
-    currentDeviceId = next.deviceId;
-    startScan();
+    stopScan(); currentDeviceId = next.deviceId; startScan();
   });
-  $('#btnTorch')?.addEventListener('click', toggleTorch);
+  btnTorch && btnTorch.addEventListener('click', toggleTorch);
 
-  // Safety: stop when page is hidden/unloaded
   document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopScan(); });
   window.addEventListener('beforeunload', stopScan);
-})();
-</script>
-
-
-<script>
-(function(){
-  function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
-  ready(function(){
-    const topBtn = document.getElementById('btnTopUpload');
-    if(!topBtn) return;
-    // Find the primary file input (closest to user flow)
-    const fileInputs = Array.from(document.querySelectorAll('input[type="file"]'));
-    if(!fileInputs.length){
-      topBtn.disabled = true; topBtn.title = 'Dosya yükleme alanı bulunamadı';
-      return;
-    }
-    const primaryFileInput = fileInputs[0];
-    // Ensure the input is interactable programmatically
-    topBtn.addEventListener('click', function(e){
-      e.preventDefault();
-      try{
-        primaryFileInput.click();
-      }catch(err){
-        console.warn('File input click failed:', err);
-      }
-    }, false);
-  });
 })();
 </script>
 
