@@ -131,7 +131,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     </div>
 
     <div class="control" style="margin-top:8px">
-      <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off">
+      <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off" inputmode="numeric" pattern="[0-9]*" enterkeyhint="search" maxlength="13">
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off">
       <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
     </div>
@@ -648,18 +648,41 @@ if(window.__DEV_TEST__) runTests();
     cvs.width = vid.videoWidth || 640; cvs.height = vid.videoHeight || 480;
   }
 
-  function onCode(txt){
-    if(!txt) return;
-    out.textContent = txt;
+    function onCode(txt){
+    const raw = (txt||'').toString();
+    const code = raw.replace(/\D/g,'');
+    if(!code) return;
+    out.textContent = code;
+    // Write to existing barkod input
     if (barkodInput){
-      barkodInput.value = txt;
+      barkodInput.value = code;
       barkodInput.dispatchEvent(new Event('input',{bubbles:true}));
+      barkodInput.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    // Decide product to open
+    let p = null;
+    try{
+      if (window.PRODUCTS && Array.isArray(PRODUCTS) && PRODUCTS.length){
+        p = PRODUCTS.find(x => (''+(x.barcode||'')).replace(/\D/g,'') === code)
+         || PRODUCTS.find(x => (''+(x.barcode||'')).slice(-6) === code.slice(-6));
+      }
+    }catch(_){}
+    // Close scanner immediately
+    stopScan();
+    // Open product popup if found; else fall back to search-by-last6 if available
+    if (p && typeof window.openProduct === 'function'){
+      window.openProduct(p);
+    }else if (typeof window.filterByLast6 === 'function'){
+      window.filterByLast6(code.slice(-6));
+    }
+  }));
       barkodInput.dispatchEvent(new Event('change',{bubbles:true}));
     }
     if (navigator.vibrate) navigator.vibrate(60);
   }
 
-  async function startScan(){
+  async window.__dgStartScan = startScan;
+  function startScan(){
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
       alert('Tarayıcınız kamera erişimini desteklemiyor.');
       return;
@@ -712,6 +735,7 @@ if(window.__DEV_TEST__) runTests();
     }
   }
 
+  window.__dgStopScan = stopScan;
   function stopScan(){
     if (rafId) cancelAnimationFrame(rafId), rafId=null;
     if (vid._zxingReader){ try{ vid._zxingReader.reset(); }catch(_){ } }
@@ -801,6 +825,21 @@ if(window.__DEV_TEST__) runTests();
   if (topUpload){
     topUpload.addEventListener('click', function(e){ e.preventDefault(); safeClickFileInput(); });
   }
+})();
+</script>
+
+
+<script>
+(function(){
+  function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+  ready(function(){
+    var closeBtn = document.getElementById('btnMdlClose');
+    if(closeBtn){
+      closeBtn.addEventListener('click', function(){
+        if (window.__dgStartScan) { window.__dgStartScan(); }
+      });
+    }
+  });
 })();
 </script>
 
