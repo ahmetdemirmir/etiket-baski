@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Demir Kırtasiye — Kamera Hotwired (Final)</title>
+<title>Demir Kırtasiye — Kamera & Upload (Android Optimize)</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <!-- Camera libs -->
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
@@ -46,14 +46,14 @@
 <!-- Top bar -->
 <div id="bar">
   <div class="wrap">
-    <button id="btnScanMain" onclick="window.__dgStartScan && window.__dgStartScan(); return false;"><i class="fa-solid fa-camera"></i> KAMERA AÇ</button>
+    <button id="btnScanMain"><i class="fa-solid fa-camera"></i> KAMERA AÇ</button>
     <button id="btnUploadMain"><i class="fa-solid fa-file-arrow-up"></i> DOSYA YÜKLE</button>
     <span class="mini" style="opacity:.9">HTTPS önerilir • Android Chrome/ iOS Safari destekli</span>
   </div>
 </div>
 
 <div class="container">
-  <h1>Fiyat Gör &amp; Etiket Bas — Final Kamera Entegrasyonu</h1>
+  <h1>Fiyat Gör &amp; Etiket Bas — Android Optimize</h1>
 
   <div class="card">
     <div class="hd">Veri Girişi</div>
@@ -70,13 +70,6 @@
         <button id="btnScanSecondary" class="btn"><i class="fa-solid fa-camera"></i> Kamera ile Oku</button>
         <button id="btnClear" class="btn light">Temizle</button>
       </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="hd">Etiket Sepeti</div>
-    <div class="bd">
-      <div class="mini">Demo alanı — kendi sepetinizle entegre edebilirsiniz.</div>
     </div>
   </div>
 </div>
@@ -101,7 +94,7 @@
 </div>
 
 <script>
-/*** Upload buttons → file input (görünmezse geçici görünür yap) ***/
+/*** Upload buttons → file input ***/
 (function(){
   function $$(sel){ return document.querySelector(sel); }
   function openFileInput(){
@@ -112,18 +105,46 @@
       restore = { display:el.style.display, visibility:el.style.visibility, position:el.style.position, left:el.style.left, top:el.style.top, width:el.style.width, height:el.style.height, opacity:el.style.opacity, zIndex:el.style.zIndex };
       el.style.display='block'; el.style.visibility='visible'; el.style.position='fixed'; el.style.left='-9999px'; el.style.top='0'; el.style.width='1px'; el.style.height='1px'; el.style.opacity='0.01'; el.style.zIndex='10000';
     }
-    try{ el.click(); } finally {
-      if(restore){ Object.assign(el.style, restore); }
-    }
+    try{ el.click(); } finally { if(restore){ Object.assign(el.style, restore); } }
   }
   ["#btnUploadMain","#btnCartUpload"].forEach(sel=>{
     var b=document.querySelector(sel); if(b) b.addEventListener("click", function(e){ e.preventDefault(); openFileInput(); });
   });
+  // CSV fallback loader
+  const input = document.getElementById('fileInput') || document.querySelector('input[type="file"]');
+  if(input){
+    input.addEventListener('change', async (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(!f) return;
+      if (window.handleFileImport && typeof window.handleFileImport === 'function'){ window.handleFileImport(f); return; }
+      if (window.onFileSelected && typeof window.onFileSelected === 'function'){ window.onFileSelected(f); return; }
+      if (/\.csv$/i.test(f.name)){
+        const txt = await f.text();
+        const rows = txt.split(/\r?\n/).map(r=> r.split(';').length>1 ? r.split(';') : r.split(','));
+        const head = (rows.shift()||[]).map(s=> (s||'').trim().toLowerCase());
+        const col = (k)=> head.findIndex(h=> h && h.includes(k));
+        const idxB = col('barkod');
+        const idxN = col('ad')>=0? col('ad') : col('ürün');
+        const idxP = head.findIndex(h=> /(mağaza|satiş fiyat|fiyat)/.test(h));
+        const idxD = head.findIndex(h=> /(fiyat.*tarih|değişiklik)/.test(h));
+        window.PRODUCTS = rows.filter(r=>r && r.length>1).map(r=>({
+          barcode: (r[idxB]||'').toString().replace(/\s+/g,''),
+          name: (r[idxN]||'').toString(),
+          price: parseFloat((r[idxP]||'0').toString().replace(',','.'))||0,
+          priceDate: r[idxD]||''
+        }));
+        console.log('Yüklenen ürün:', window.PRODUCTS.length);
+        alert('CSV yüklendi: ' + window.PRODUCTS.length + ' ürün.');
+      }else{
+        alert('Bu projede CSV bekleniyor. XLS/XLSX için kendi okuyucunuza delege ediliyor.');
+      }
+    });
+  }
 })();
 </script>
 
 <script>
-/*** KAMERA — Hotwired, tek tuşla çalışır ***/
+/*** KAMERA — Android optimize (ZXing hints + ROI + autofocus) ***/
 (function(){
   const $ = (s)=>document.querySelector(s);
   const modal = $('#scanModal'), video = $('#scanVideo'), canvas = $('#scanCanvas'), ctx = canvas.getContext('2d');
@@ -131,37 +152,9 @@
   const btnScanMain = $('#btnScanMain'), btnScanSecondary = $('#btnScanSecondary');
   const inpBarcode = document.getElementById('inpBarcode');
   let stream=null, track=null, currentDeviceId=null, devices=[], rafId=null;
-  const usingBD = ('BarcodeDetector' in window);
-
-  async function listCameras(){
-    if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
-    const devs = await navigator.mediaDevices.enumerateDevices();
-    return devs.filter(d=>d.kind==='videoinput');
-  }
-
-  async function openCamera(deviceId){
-    const constraints = {
-      audio:false,
-      video:{
-        deviceId: deviceId ? { exact: deviceId } : undefined,
-        facingMode: deviceId ? undefined : { ideal:'environment' },
-        width:{ ideal:1280 }, height:{ ideal:720 }
-      }
-    };
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream; await video.play();
-    track = stream.getVideoTracks()[0];
-    currentDeviceId = track.getSettings().deviceId || deviceId || null;
-    canvas.width = video.videoWidth || 640; canvas.height = video.videoHeight || 480;
-  }
-
-  function stopScan(){
-    if(rafId) cancelAnimationFrame(rafId), rafId=null;
-    if(video._zxingReader){ try{ video._zxingReader.reset(); }catch(e){} }
-    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; track=null; }
-    modal.style.display='none';
-    out.textContent='—';
-  }
+  let zxingReader = null;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const hasBD = ('BarcodeDetector' in window);
 
   function setBarcodeValue(code){
     if(!code) return;
@@ -177,8 +170,7 @@
     const code = (txt||'').toString().replace(/\D/g,'');
     if(!code) return;
     setBarcodeValue(code);
-    stopScan(); // Ürün okunur okunmaz kapat
-    // Ürünü aç (varsa)
+    stopScan();
     try{
       if (window.PRODUCTS && Array.isArray(PRODUCTS)){
         let p = PRODUCTS.find(x => (''+(x.barcode||'')).replace(/\D/g,'') === code)
@@ -187,16 +179,83 @@
         else if (typeof window.filterByLast6 === 'function'){ window.filterByLast6(code.slice(-6)); }
       }else if (typeof window.filterByLast6 === 'function'){ window.filterByLast6(code.slice(-6)); }
     }catch(e){}
-    // Pop-up kapanınca otomatik yeniden başlat
     const btnMdlClose = document.getElementById('btnMdlClose');
     if(btnMdlClose){
       const once = ()=>{ btnMdlClose.removeEventListener('click', once); window.__dgStartScan && window.__dgStartScan(); };
       btnMdlClose.addEventListener('click', once);
     }else{
-      // Popup yoksa 1sn sonra tekrar aç
       setTimeout(()=>{ window.__dgStartScan && window.__dgStartScan(); }, 1000);
     }
     if(navigator.vibrate) navigator.vibrate(60);
+  }
+
+  async function listCameras(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    return devs.filter(d=>d.kind==='videoinput');
+  }
+
+  async function openCamera(deviceId){
+    const constraints = {
+      audio:false,
+      video:{
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        facingMode: deviceId ? undefined : { ideal:'environment' },
+        width:{ ideal:1280 }, height:{ ideal:720 },
+        frameRate: { ideal: 30, max: 60 }
+      }
+    };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream; await video.play();
+    track = stream.getVideoTracks()[0];
+    currentDeviceId = track.getSettings().deviceId || deviceId || null;
+
+    try{
+      const caps = track.getCapabilities ? track.getCapabilities() : {};
+      const adv = [];
+      if ('focusMode' in caps) adv.push({ focusMode: 'continuous' });
+      if ('exposureMode' in caps) adv.push({ exposureMode: 'continuous' });
+      if ('zoom' in caps){
+        const z = Math.min(caps.zoom.max || 2, 2);
+        if (z && z > 1) adv.push({ zoom: z });
+      }
+      if (adv.length) await track.applyConstraints({ advanced: adv });
+    }catch(e){}
+
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+  }
+
+  function stopScan(){
+    if(rafId) cancelAnimationFrame(rafId), rafId=null;
+    if(video._zxingReader){ try{ video._zxingReader.reset(); }catch(e){} }
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; track=null; }
+    modal.style.display='none';
+    out.textContent='—';
+  }
+
+  function getZXingReader(){
+    if (zxingReader) return zxingReader;
+    try{
+      const hints = new Map();
+      if (window.ZXing && window.ZXing.DecodeHintType){
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+          ZXing.BarcodeFormat.EAN_13,
+          ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.CODE_128,
+          ZXing.BarcodeFormat.UPC_A
+        ]);
+      }
+      if (window.ZXingBrowser && ZXingBrowser.BrowserMultiFormatReader){
+        zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints);
+      } else if (window.ZXing && ZXing.BrowserMultiFormatReader){
+        zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+      } else {
+        zxingReader = null;
+      }
+    }catch(e){ zxingReader = null; }
+    return zxingReader;
   }
 
   async function startScan(){
@@ -213,31 +272,44 @@
     modal.style.display='grid';
     out.textContent='—';
 
-    if(usingBD){
+    const preferZXing = isAndroid || !hasBD;
+    if(preferZXing){
+      const reader = getZXingReader();
+      if(reader){
+        reader.decodeFromVideoElementContinuously(video, (result, err)=>{ if(result && result.text){ onCode(result.text); } });
+        video._zxingReader = reader;
+        return;
+      }
+    }
+
+    if(hasBD){
       const detector = new BarcodeDetector({ formats:['ean_13','ean_8','code_128','upc_a','qr_code'] });
+      let last = 0;
       const loop = async ()=>{
         try{
-          const bitmap = await createImageBitmap(video);
-          const codes = await detector.detect(bitmap);
-          if(codes && codes.length){ onCode(codes[0].rawValue || codes[0].value || ''); }
+          const now = performance.now();
+          if(now - last > 120){
+            last = now;
+            const vw = video.videoWidth, vh = video.videoHeight;
+            const sw = Math.floor(vw * 0.7), sh = Math.floor(vh * 0.7);
+            const sx = Math.floor((vw - sw)/2), sy = Math.floor((vh - sh)/2);
+            const bitmap = await createImageBitmap(video, sx, sy, sw, sh);
+            const codes = await detector.detect(bitmap);
+            if(codes && codes.length){ onCode(codes[0].rawValue || codes[0].value || ''); }
+          }
         }catch(_){}
         rafId = requestAnimationFrame(loop);
       };
       rafId = requestAnimationFrame(loop);
-    }else if(window.ZXingBrowser && ZXingBrowser.BrowserMultiFormatReader){
-      const reader = new ZXingBrowser.BrowserMultiFormatReader();
-      reader.decodeFromVideoElementContinuously(video, (result, err)=>{ if(result && result.text){ onCode(result.text); } });
-      video._zxingReader = reader;
-    }else if(window.ZXing && ZXing.BrowserMultiFormatReader){
-      const reader = new ZXing.BrowserMultiFormatReader();
-      reader.decodeFromVideoElementContinuously(video, (result, err)=>{ if(result && result.text){ onCode(result.text); } });
-      video._zxingReader = reader;
-    }else if(window.jsQR){
+      return;
+    }
+
+    if(window.jsQR){
       const loop = ()=>{
         try{
           ctx.drawImage(video,0,0,canvas.width,canvas.height);
           const img = ctx.getImageData(0,0,canvas.width,canvas.height);
-          const qr = jsQR(img.data, img.width, img.height);
+          const qr = jsQR(img.data,img.width,img.height);
           if(qr && qr.data){ onCode(qr.data); }
         }catch(_){}
         rafId = requestAnimationFrame(loop);
@@ -248,12 +320,10 @@
     }
   }
 
-  // Global erişim + bağlayıcılar
   window.__dgStartScan = startScan;
   window.__dgStopScan  = stopScan;
 
-  if(btnScanMain){ btnScanMain.addEventListener('click', (e)=>{ e.preventDefault(); startScan(); }); }
-  if(btnScanSecondary){ btnScanSecondary.addEventListener('click', (e)=>{ e.preventDefault(); startScan(); }); }
+  [btnScanMain, btnScanSecondary].forEach(b=>{ if(b){ b.addEventListener('click', (e)=>{ e.preventDefault(); startScan(); }); }});
   if(btnClose){ btnClose.addEventListener('click', (e)=>{ e.preventDefault(); stopScan(); }); }
   if(btnSwitch){ btnSwitch.addEventListener('click', async ()=>{ devices = await listCameras(); if(!devices.length) return;
     const idx = devices.findIndex(d=> d.deviceId === currentDeviceId);
@@ -265,13 +335,11 @@
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     if(!('torch' in caps)) { alert('Flaş desteklenmiyor.'); return; }
     try{
-      const settings = track.getSettings();
-      const on = !settings.torch; // not standardized; we just toggle
+      const set = track.getSettings(); const on = !set.torch;
       await track.applyConstraints({ advanced:[{ torch: on }] });
     }catch(e){ console.warn('Torch apply failed', e); }
   }); }
 
-  // Güvenli kapatma
   document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopScan(); });
   window.addEventListener('beforeunload', stopScan);
 })();
