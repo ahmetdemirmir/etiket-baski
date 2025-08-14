@@ -560,6 +560,9 @@ if(window.__DEV_TEST__) runTests();
 
 <script>
 (function(){
+  // Local aliases for global controls
+  const startScan = (...args) => window.__dgStartScan && window.__dgStartScan(...args);
+  const stopScan  = (...args) => window.__dgStopScan  && window.__dgStopScan(...args);
   function $(sel){ return document.querySelector(sel); }
   function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
 
@@ -682,7 +685,7 @@ if(window.__DEV_TEST__) runTests();
   }
 
   async window.__dgStartScan = startScan;
-  function startScan(){
+  window.__dgStartScan = async function startScan(){
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
       alert('Tarayıcınız kamera erişimini desteklemiyor.');
       return;
@@ -736,7 +739,7 @@ if(window.__DEV_TEST__) runTests();
   }
 
   window.__dgStopScan = stopScan;
-  function stopScan(){
+  window.__dgStopScan = function stopScan(){
     if (rafId) cancelAnimationFrame(rafId), rafId=null;
     if (vid._zxingReader){ try{ vid._zxingReader.reset(); }catch(_){ } }
     if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; track=null; }
@@ -767,6 +770,13 @@ if(window.__DEV_TEST__) runTests();
 
   document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopScan(); });
   window.addEventListener('beforeunload', stopScan);
+
+  // Bind top/secondary scan buttons reliably (same scope)
+  const btnTopScan = document.getElementById('dgTopScan');
+  if(btnTopScan){ btnTopScan.addEventListener('click', function(ev){ ev.preventDefault(); window.__dgStartScan && window.__dgStartScan(); }); }
+  const legacyBtnScan = document.getElementById('btnScan');
+  if(legacyBtnScan){ legacyBtnScan.addEventListener('click', function(ev){ ev.preventDefault(); window.__dgStartScan && window.__dgStartScan(); }); }
+
 })();
 </script>
 
