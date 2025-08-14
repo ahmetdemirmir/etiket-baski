@@ -843,5 +843,24 @@ if(window.__DEV_TEST__) runTests();
 })();
 </script>
 
+
+<script>
+(function(){
+  function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+  ready(function(){
+    function bindScan(sel){
+      var el = document.querySelector(sel);
+      if(!el) return;
+      el.addEventListener('click', function(ev){
+        ev.preventDefault();
+        if (window.__dgStartScan) window.__dgStartScan();
+        else if (typeof startScan === 'function') startScan();
+      });
+    }
+    ['#dgTopScan', '#btnScan'].forEach(bindScan);
+  });
+})();
+</script>
+
 </body>
 </html>
