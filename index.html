@@ -75,34 +75,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 </style>
 </head>
 <body>
-
-<div style="margin: 15px 0; text-align: center;">
-  <button id="fetchSheetsData" style="background-color: #007bff; color: white; padding: 12px 20px; font-size: 18px; border: none; border-radius: 8px; cursor: pointer;">
-    <i class="fas fa-sync-alt"></i> Güncel Veriyi Çek
-  </button>
-</div>
-<script>
-document.getElementById("fetchSheetsData").addEventListener("click", function() {
-    fetch("https://script.google.com/macros/s/AKfycbymC0KeZ-EHPnL4et5bmFLazdvd2ZU-FgWxXcg7sfIU-MHwV1_gvgp5muzwFlwZTDhy/exec")
-        .then(res => res.text())
-        .then(csvText => {
-            let wb = XLSX.read(csvText, { type: "string" });
-            let firstSheet = wb.Sheets[wb.SheetNames[0]];
-            let jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
-            if (typeof loadExcelData === "function") {
-                loadExcelData(jsonData);
-                alert("✅ Güncel veri çekildi ve yüklendi.");
-            } else {
-                console.error("loadExcelData fonksiyonu bulunamadı.");
-            }
-        })
-        .catch(err => {
-            console.error("Veri çekme hatası:", err);
-            alert("❌ Veri çekilemedi, konsolu kontrol edin.");
-        });
-});
-</script>
-
 <header>
   <img src="logo.png" alt="Logo">
   <h1>Fiyat Gör Etiket Bas</h1>
@@ -121,7 +93,8 @@ document.getElementById("fetchSheetsData").addEventListener("click", function() 
         <button id="btnCam" class="btn primary" style="font-size:16px">
           <i class="fa-solid fa-camera"></i> Kamera Aç
         </button>
-      </div>
+      
+        <button id="btnCloud" class="btn primary" style="font-size:16px"><i class="fa-solid fa-cloud-arrow-down"></i> Güncel veriyi çek</button></div>
     </div>
 
     <div class="control" style="margin-top:8px">
@@ -234,6 +207,99 @@ function parseExcelDate(v){ if(!v&&v!==0)return null; if(v instanceof Date&&!isN
 function mapRowByKeys(row){ const nk={};Object.keys(row).forEach(k=>nk[normKey(k)]=k); const pick=(syns)=>{for(const s of syns){for(const k in nk){if(k===s||k.includes(s))return row[nk[k]];}} return undefined;}; const barcode=pick(['barkod','barkodno','barkodu','ean','ean13']); const name=pick(['stokadi','urunadi','adi','ad','stok','aciklama']); const price=pick(['magaza','magazasatis','magazasatisfiyati','magazafiyati','satisfiyati1','satisfiyat1','sf1','fiyat','perakendesatis']); const date=pick(['satisfiyati1degtar','satisfiyati1degtarihi','fiyatdegisikliktarihi','fiyatdegtarihi','fdtarihi','degisiktarihi','degistarihi','fiyatguncellemetarihi']); return {barcode,name,price,date}; }
 function normKey(s){return String(s||'').toLowerCase().replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');}
 function normalizeRow(r){ const m=mapRowByKeys(r); return { barcode:parseBarcode(m.barcode), name:String(m.name||'').trim(), price:parsePrice(m.price), priceDate:parseExcelDate(m.date) }; }
+/* ===== CLOUD FETCH (Google Apps Script) ===== */
+const CLOUD_URL = "https://script.google.com/macros/s/AKfycbymC0KeZ-EHPnL4et5bmFLazdvd2ZU-FgWxXcg7sfIU-MHwV1_gvgp5muzwFlwZTDhy/exec";
+
+function _rowsFromJson(data){
+  try{
+    if(data==null) return [];
+    // Common wrappers
+    if(Array.isArray(data)) return _rowsFromJson({rows:data});
+    if(data.rows) return _rowsFromJson(data.rows);
+    if(data.data) return _rowsFromJson(data.data);
+    // rows may be array of objects
+    if(Array.isArray(data)===false && typeof data==='object') return [];
+    return [];
+  }catch(_){ return []; }
+}
+
+function rowsToProducts(rows){
+  // rows can be array of objects or array of arrays (with header row)
+  let out=[];
+  if(!Array.isArray(rows)) return out;
+  if(rows.length===0) return out;
+  if(!Array.isArray(rows[0]) && typeof rows[0]==='object'){
+    out = rows.map(normalizeRow).filter(x=>x.barcode&&x.name);
+  }else if(Array.isArray(rows[0])){
+    const header = rows[0].map(x=>String(x||''));
+    for(let i=1;i<rows.length;i++){
+      const r = rows[i]||[]; const o={};
+      for(let j=0;j<header.length;j++){ o[header[j]] = r[j]; }
+      const n = normalizeRow(o);
+      if(n.barcode&&n.name) out.push(n);
+    }
+  }
+  return out;
+}
+
+async function fetchCloud(){
+  const btn = document.getElementById('btnCloud');
+  try{
+    if(btn) btn.disabled=true;
+    const res = await fetch(CLOUD_URL + "?t=" + Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const ct = (res.headers.get("content-type")||"").toLowerCase();
+    let products = [];
+    if(ct.includes("application/json")){
+      const j = await res.json();
+      // Try common shapes:
+      // 1) {rows:[{...}]} or {data:[...]} or directly [ ... ]
+      const rows = Array.isArray(j) ? j : (j.rows || j.data || j.sheet || j.values || j.records || j.items || []);
+      products = rowsToProducts(rows);
+      // If still empty and json is object-of-arrays, attempt convert
+      if(products.length===0 && j && typeof j==='object' && !Array.isArray(j)){
+        const vals = j.values || j.items || j.records || j.rows;
+        if(Array.isArray(vals)) products = rowsToProducts(vals);
+      }
+    }else{
+      // Try parsing as CSV/TSV/plain table via XLSX
+      const text = await res.text();
+      let wb = null, ok=false;
+      try{
+        wb = XLSX.read(text, {type:'string'});
+        ok = true;
+      }catch(_){ /* may be JSON string */ }
+      if(!ok){
+        try{ const j = JSON.parse(text); const rows = Array.isArray(j)?j:(j.rows||j.data||j.values||j.items||[]); products = rowsToProducts(rows); }
+        catch(e){ /* give up */ }
+      }else{
+        try{
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          const rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+          products = rowsObj.map(normalizeRow).filter(x=>x.barcode&&x.name);
+        }catch(_){}
+      }
+    }
+    if(!Array.isArray(products) || products.length===0){
+      alert("Buluttan uygun veri alınamadı. Apps Script çıktısını kontrol edin.");
+      return;
+    }
+    PRODUCTS = products;
+    badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Bulut)`;
+    showToast("Güncel veri çekildi");
+    refocusAfterAction(true);
+  }catch(e){
+    alert("Bulut verisi alınamadı: " + e.message);
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const b = document.getElementById('btnCloud');
+  if(b) b.addEventListener('click', fetchCloud);
+});
+
 
 /* ===== CART ===== */
 function setCart(n){ CART=n; localStorage.setItem('etiket_cart',JSON.stringify(CART)); cartCount.textContent=CART.reduce((a,x)=>a+x.qty,0); }
