@@ -116,6 +116,90 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   <span id="btnFetchSheetHint" class="hint" style="margin-left:8px;color:#64748b"></span>
 </div>
 
+<script>
+(function(){
+  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
+
+  function normalizeHeader(h){
+    return (h||"").toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/\s+/g,' ').trim();
+  }
+
+  async function fetchCSV() {
+    const btn = document.getElementById('btnFetchSheet');
+    const hint = document.getElementById('btnFetchSheetHint');
+    const fileInput = document.getElementById('fileExcel');
+    if(!btn || !hint || !fileInput) return;
+
+    btn.disabled = true; btn.setAttribute('aria-busy','true');
+    hint.textContent = "İndiriliyor...";
+
+    try{
+      const resp = await fetch(CSV_URL, {cache: 'no-store'});
+      if(!resp.ok) throw new Error("HTTP " + resp.status);
+      const text = await resp.text();
+
+      const firstLine = text.split(/\r?\n/)[0] || "";
+      const headers = [];
+      let cur = "", inQ = false;
+      for (let i=0;i<firstLine.length;i++){
+        const ch = firstLine[i];
+        if (ch === '"'){
+          if (inQ && firstLine[i+1] === '"'){ cur += '"'; i++; }
+          else inQ = !inQ;
+        } else if (ch === ',' && !inQ) { headers.push(cur); cur = ""; }
+        else { cur += ch; }
+      }
+      headers.push(cur);
+
+      const norm = headers.map(normalizeHeader);
+      const hasBarkod = norm.some(h => ['barkod','ean','ean13','barkod no','barkod numarasi','barkod numarası'].includes(h));
+      const hasAd     = norm.some(h => ['stok adi','urun adi','ürün adı','ad'].includes(h));
+      const hasFiyat  = norm.some(h => ['magaza','mağaza','satis fiyati 1','satış fiyatı 1','fiyat'].includes(h));
+      const hasTarih  = norm.some(h => ['fiyat degisiklik tarihi','fiyat değişiklik tarihi','fiyat tarih','fdt','tarih'].includes(h));
+
+      if(!(hasBarkod && hasAd && hasFiyat)){
+        hint.textContent = "Başlıklar uyumsuz (Barkod / Ad / Mağaza zorunlu).";
+        throw new Error("Required headers missing.");
+      }
+
+      const bom = new Uint8Array([0xEF,0xBB,0xBF]);
+      const blob = new Blob([bom, text], {type: "text/csv"});
+      const file = new File([blob], "guncel.csv", {type: "text/csv", lastModified: Date.now()});
+
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      fileInput.dispatchEvent(new Event('change', {bubbles: true}));
+
+      hint.textContent = "Tamam: CSV içeri alındı.";
+    }catch(err){
+      console.error(err);
+      hint.textContent = "İndirme/işleme hatası. Ağ veya başlıkları kontrol edin.";
+      alert("Güncel liste alınamadı: " + err.message);
+    }finally{
+      const btn = document.getElementById('btnFetchSheet');
+      if(btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); }
+      setTimeout(() => { const h=document.getElementById('btnFetchSheetHint'); if(h && h.textContent.startsWith("Tamam")) h.textContent=""; }, 4000);
+    }
+  }
+
+  function wire(){
+    const b1 = document.getElementById('btnFetchSheet');
+    if(b1) b1.addEventListener('click', fetchCSV);
+
+    const b2 = document.getElementById('btnOpenCam');
+    if(b2) b2.addEventListener('click', () => {
+      try{ if(typeof startCamera === 'function') startCamera(); }catch(e){ console.error(e); alert("Kamera açılamadı: "+e.message); }
+    });
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
+})();
+</script>
+
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; **KAMERA ile okutunca ürün popup'ı direkt açılır**.</small>
   </div>
@@ -515,88 +599,4 @@ async function makeOldListDoc(){
 })(); // IIFE
 </script>
 </body>
-</html
-<script>
-(() => {
-  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
-
-  function normalizeHeader(h){
-    return (h||"").toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-      .replace(/\s+/g,' ').trim();
-  }
-
-  async function fetchCSV() {
-    const btn = document.getElementById('btnFetchSheet');
-    const hint = document.getElementById('btnFetchSheetHint');
-    const fileInput = document.getElementById('fileExcel');
-    if(!btn || !hint || !fileInput) return;
-
-    btn.disabled = true; btn.setAttribute('aria-busy','true');
-    hint.textContent = "İndiriliyor...";
-
-    try{
-      const resp = await fetch(CSV_URL, {cache: 'no-store'});
-      if(!resp.ok) throw new Error("HTTP " + resp.status);
-      const text = await resp.text();
-
-      const firstLine = text.split(/\r?\n/)[0] || "";
-      const headers = [];
-      let cur = "", inQ = false;
-      for (let i=0;i<firstLine.length;i++){
-        const ch = firstLine[i];
-        if (ch === '"'){
-          if (inQ && firstLine[i+1] === '"'){ cur += '"'; i++; }
-          else inQ = !inQ;
-        } else if (ch === ',' && !inQ) { headers.push(cur); cur = ""; }
-        else { cur += ch; }
-      }
-      headers.push(cur);
-
-      const norm = headers.map(normalizeHeader);
-      const hasBarkod = norm.some(h => ['barkod','ean','ean13','barkod no','barkod numarasi','barkod numarası'].includes(h));
-      const hasAd     = norm.some(h => ['stok adi','urun adi','ürün adı','ad'].includes(h));
-      const hasFiyat  = norm.some(h => ['magaza','mağaza','satis fiyati 1','satış fiyatı 1','fiyat'].includes(h));
-      const hasTarih  = norm.some(h => ['fiyat degisiklik tarihi','fiyat değişiklik tarihi','fiyat tarih','fdt','tarih'].includes(h));
-
-      if(!(hasBarkod && hasAd && hasFiyat)){
-        hint.textContent = "Başlıklar uyumsuz (Barkod / Ad / Mağaza zorunlu).";
-        throw new Error("Required headers missing.");
-      }
-
-      const bom = new Uint8Array([0xEF,0xBB,0xBF]);
-      const blob = new Blob([bom, text], {type: "text/csv"});
-      const file = new File([blob], "guncel.csv", {type: "text/csv", lastModified: Date.now()});
-
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      fileInput.files = dt.files;
-      fileInput.dispatchEvent(new Event('change', {bubbles: true}));
-
-      hint.textContent = "Tamam: CSV içeri alındı.";
-    }catch(err){
-      console.error(err);
-      hint.textContent = "İndirme/işleme hatası. Ağ veya başlıkları kontrol edin.";
-      alert("Güncel liste alınamadı: " + err.message);
-    }finally{
-      const btn = document.getElementById('btnFetchSheet');
-      if(btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); }
-      setTimeout(() => { const h=document.getElementById('btnFetchSheetHint'); if(h && h.textContent.startsWith("Tamam")) h.textContent=""; }, 4000);
-    }
-  }
-
-  function wire(){
-    const b1 = document.getElementById('btnFetchSheet');
-    if(b1) b1.addEventListener('click', fetchCSV);
-
-    const b2 = document.getElementById('btnOpenCam');
-    if(b2) b2.addEventListener('click', () => {
-      try{ if(typeof startCamera === 'function') startCamera(); }catch(e){ console.error(e); alert("Kamera açılamadı: "+e.message); }
-    });
-  }
-
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
-  else wire();
-})();
-</script>
->
+</html>
