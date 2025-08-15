@@ -82,11 +82,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .pdfBox{width:min(95vw,920px);height:90vh;display:flex;flex-direction:column}
 .pdfFrame{flex:1;border:1px solid var(--line);border-radius:8px}
 </style>
-
-<style id="hide-legacy-cam">
-  #btnCamV3{ display:none !important; }
-</style>
-
+<style>#btnCamV3{display:none!important}</style>
 </head>
 <body>
 <header>
@@ -522,7 +518,7 @@ if(window.__DEV_TEST__) runTests();
 })(); // IIFE yalnız sonda
 </script>
 
-<script id="price-view-mode">
+<script>
 (function(){
   var pvTimer=null;
   function clearPV(){
@@ -533,22 +529,21 @@ if(window.__DEV_TEST__) runTests();
     try{
       var mdl=document.getElementById('mdlProduct');
       if(!mdl){ console.warn('mdlProduct not found'); return; }
-      document.getElementById('mName').textContent=p.name ?? '';
-      document.getElementById('mPrice').textContent=fmtTRY.format(p.price ?? 0);
-      document.getElementById('mBarcode').textContent=p.barcode ?? '';
+      var f = Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2});
+      (document.getElementById('mName')||{}).textContent=p.name||'';
+      (document.getElementById('mPrice')||{}).textContent=f.format(p.price||0);
+      (document.getElementById('mBarcode')||{}).textContent=p.barcode||'';
       var d=p.priceDate? new Date(p.priceDate):null;
-      var row=document.getElementById('mDateRow');
-      if(row) row.style.display = d? 'block':'none';
+      var row=document.getElementById('mDateRow'); if(row) row.style.display = d? 'block':'none';
       var out=document.getElementById('mDate'); if(out) out.textContent = d? d.toLocaleDateString('tr-TR') : '—';
-      var old = isOld(p);
-      var warn=document.getElementById('mOld'); if(warn) warn.style.display = old? 'block':'none';
+      var warn=document.getElementById('mOld'); if(warn) warn.style.display = (function(){ try{ return isOld(p); }catch(e){ return false; }})() ? 'block':'none';
 
       try { mdl.querySelectorAll('[data-qty], #btnCustom').forEach(function(el){ el.style.display='none'; }); } catch(e){}
 
       clearPV();
       var box = mdl.querySelector('.box') || mdl;
       var wrap = document.createElement('div'); wrap.id='pvWrap'; wrap.style.marginTop='8px';
-      wrap.innerHTML = '<div style="font-size:12px;opacity:.8">Bu pencere <b><span id="pvSec">6</span>s</b> sonra kapanacak</div>      <div style="position:relative;height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:6px">        <div id="pvBar" style="position:absolute;left:0;top:0;height:100%;width:100%;background:linear-gradient(90deg,var(--brand,#2563eb),var(--brand2,#22c55e));transition:width .1s"></div>      </div>';
+      wrap.innerHTML = '<div style="font-size:12px;opacity:.8">Bu pencere <b><span id="pvSec">6</span>s</b> sonra kapanacak</div>      <div style="position:relative;height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:6px">        <div id="pvBar" style="position:absolute;left:0;top:0;height:100%;width:100%;background:linear-gradient(90deg,#2563eb,#22c55e);transition:width .1s"></div>      </div>';
       box.appendChild(wrap);
       var left=6000, step=100;
       var bar=document.getElementById('pvBar'), sec=document.getElementById('pvSec');
@@ -563,9 +558,7 @@ if(window.__DEV_TEST__) runTests();
           try{ refocusAfterAction(true); }catch(e){}
         }
       }, step);
-
       mdl.classList.add('shown');
-
       var cancelBtn = document.getElementById('btnCancel');
       if(cancelBtn){
         var _old=cancelBtn.onclick;
@@ -584,22 +577,41 @@ if(window.__DEV_TEST__) runTests();
 })();
 </script>
 
+
 <script>
-// cam.js — Clean camera integration using BarcodeDetector (no external libs)
+// Clean camera integration using BarcodeDetector; robust matching; AbortError-hardened; 7s timeout
 (function(){
-  var stream=null, scanning=false, starting=false, rafId=null;
+  var stream=null, scanning=false, starting=false, rafId=null, noDetTimer=null;
   var resumeAfter=false, resumeDebounce=null;
   var lastCode=null, lastHit=0;
-  var sheet=null, mount=null, video=null;
+  var sheet=null, video=null;
 
   function $(id){ return document.getElementById(id); }
 
-  function setBtnBusy(b){ try{ var cam=document.getElementById('btnCam'); if(cam) cam.disabled=b; var pv=document.getElementById('btnPriceView'); if(pv) pv.disabled=b; }catch(e){} }
+  function setBtnBusy(b){ try{ var cam=$('btnCam'); if(cam) cam.disabled=b; var pv=$('btnPriceView'); if(pv) pv.disabled=b; }catch(e){} }
+
+  function resetNoDetTimer(){ try{ if(noDetTimer){ clearTimeout(noDetTimer); noDetTimer=null; } }catch(e){} }
+  function armNoDetTimer(){
+    resetNoDetTimer();
+    noDetTimer = setTimeout(function(){
+      stopCamera().then(function(){
+        window.closeCam();
+        setTimeout(function(){
+          try{
+            if(confirm('Barkod okunamadı. Yeniden denensin mi?')){
+              window.openCam();
+            }
+          }catch(e){}
+        }, 10);
+      });
+    }, 7000);
+  }
+
   function injectSheet(){
     if(sheet) return;
-    sheet = document.createElement('div');
-    sheet.id='camSheet';
-    sheet.innerHTML = '\
+    var el = document.createElement('div');
+    el.id='camSheet';
+    el.innerHTML = '\
     <style>\
       #camSheet{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:none}\
       #camBox{position:absolute;left:50%;top:8%;transform:translateX(-50%);width:min(96vw,720px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden}\
@@ -617,29 +629,29 @@ if(window.__DEV_TEST__) runTests();
         <button id="camStop" class="btn">Durdur</button>\
       </div>\
     </div>';
-    document.body.appendChild(sheet);
-    $('camClose').addEventListener('click', closeCam);
+    document.body.appendChild(el);
+    sheet = el;
+    video = $('camVideo');
+    $('camClose').addEventListener('click', window.closeCam);
     $('camStop').addEventListener('click', stopCamera);
-    mount=$('camMount'); video=$('camVideo');
   }
 
   window.openCam = function(){
-    if(starting || scanning) return; // single-flight guard
+    if(starting || scanning) return;
     setBtnBusy(true);
     try{ window.__priceViewMode = !!window.__priceViewMode; }catch(e){}
     injectSheet();
     sheet.style.display='block';
     startCamera();
   };
-  window.closeCam = function(){ stopCamera().then(function(){ starting=false; setBtnBusy(false); sheet.style.display='none'; }); };
+  window.closeCam = function(){ stopCamera().then(function(){ resetNoDetTimer(); starting=false; setBtnBusy(false); sheet.style.display='none'; }); };
 
-  
-async function startCamera(){
+  async function startCamera(){
     if(starting || scanning) return;
     starting = true;
     if(!('BarcodeDetector' in window)){
       alert('Tarayıcı bu cihazda BarcodeDetector desteklemiyor. En güncel Chrome / Edge deneyin.');
-      starting = false; setBtnBusy(false);
+      starting=false; setBtnBusy(false);
       return;
     }
     try{
@@ -647,34 +659,30 @@ async function startCamera(){
       const wanted = ['ean-13','ean-8','upc-a','upc-e','code-128','code-39','itf','codabar'];
       const fmts = supported.filter(f => wanted.includes(f));
       const detector = fmts.length ? new BarcodeDetector({ formats: fmts }) : new BarcodeDetector();
-      stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode: { ideal:'environment' }, width:{ideal:1280}, height:{ideal:720} }, audio:false });
+      stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} }, audio:false });
       video.srcObject = stream;
       await new Promise(res => {
-        try{
-          if (video.readyState >= 2) res();
-          else video.onloadedmetadata = () => res();
-        }catch(_){ res(); }
+        try{ if(video.readyState>=2) res(); else video.onloadedmetadata=()=>res(); }catch(_){ res(); }
       });
       try{
         await video.play();
       }catch(err){
-        if(err && err.name === 'AbortError'){
-          await new Promise(r => setTimeout(r, 80));
+        if(err && err.name==='AbortError'){
+          await new Promise(r=>setTimeout(r,80));
           await video.play();
-        }else{
-          throw err;
-        }
+        }else{ throw err; }
       }
       scanning = true;
       starting = false;
       setBtnBusy(false);
+      armNoDetTimer();
       const tick = async ()=>{
         if(!scanning) return;
         try{
           const codes = await detector.detect(video);
           if(codes && codes.length){
             let raw = (codes[0].rawValue ?? codes[0].value ?? '').toString();
-            let m = raw.match(/\d{8,}/g); const code = m ? m.sort((a,b)=>b.length-a.length)[0] : raw;
+            let m = raw.match(/\\d{8,}/g); const code = m ? m.sort((a,b)=>b.length-a.length)[0] : raw;
             onDetected(code);
             return;
           }
@@ -683,18 +691,17 @@ async function startCamera(){
       };
       rafId = requestAnimationFrame(tick);
     }catch(e){
-      starting = false; setBtnBusy(false);
-      alert('Kamera başlatma hatası: ' + e);
+      starting=false; setBtnBusy(false);
+      alert('Kamera başlatma hatası: '+ e);
     }
   }
-
 
   function stopCamera(){
     return new Promise(function(resolve){
       scanning=false; starting=false;
       try{ rafId && cancelAnimationFrame(rafId); }catch(e){}
       try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); } }catch(e){}
-      try{ video && (video.srcObject=null); }catch(e){}
+      try{ if(video){ video.srcObject=null; } }catch(e){}
       resolve();
     });
   }
@@ -708,24 +715,37 @@ async function startCamera(){
   function findProduct(code){
     try{
       var arr = window.PRODUCTS || [];
-      return arr.find(function(p){ return p.barcode === code; }) || null;
+      function norm(x){ return String(x==null?'':x).replace(/\\D/g,''); }
+      var c = norm(code);
+      var exact = arr.find(function(p){ return norm(p.barcode)===c; });
+      if(exact) return exact;
+      if(c.length===13){
+        var c12 = c.slice(1);
+        var upc = arr.find(function(p){ var pb=norm(p.barcode); return pb.length===12 && pb===c12; });
+        if(upc) return upc;
+      } else if(c.length===12){
+        var ean = arr.find(function(p){ var pb=norm(p.barcode); return pb.length===13 && pb.slice(1)===c; });
+        if(ean) return ean;
+      }
+      var suf = arr.find(function(p){ var pb=norm(p.barcode); return pb.length>=8 && c.length>=8 && (pb.endsWith(c) || c.endsWith(pb)); });
+      return suf || null;
     }catch(e){ return null; }
   }
 
   function isShown(node){
     if(!node || node.nodeType!==1) return false;
     if(node.hidden) return false;
-    var cs = getComputedStyle(node);
+    var cs=getComputedStyle(node);
     return !(cs.display==='none' || cs.visibility==='hidden' || parseFloat(cs.opacity)===0);
   }
   function countOpenModals(){
-    var nodes = document.querySelectorAll('.modal,[role=\"dialog\"],.popup,#mdlProduct,#mdlPdf,.swal2-container,.swal2-shown');
+    var nodes=document.querySelectorAll('.modal,[role="dialog"],.popup,#mdlProduct,#mdlPdf,.swal2-container,.swal2-shown');
     var c=0; nodes.forEach(function(n){ if(isShown(n)) c++; });
     return c;
   }
   function tryResume(){
     clearTimeout(resumeDebounce);
-    resumeDebounce = setTimeout(function(){
+    resumeDebounce=setTimeout(function(){
       if(!resumeAfter) return;
       if(countOpenModals()===0){
         resumeAfter=false;
@@ -733,8 +753,8 @@ async function startCamera(){
       }
     }, 300);
   }
-  var mo1 = new MutationObserver(function(){ if(resumeAfter) tryResume(); });
-  var mo2 = new MutationObserver(function(){ if(resumeAfter) tryResume(); });
+  var mo1=new MutationObserver(function(){ if(resumeAfter) tryResume(); });
+  var mo2=new MutationObserver(function(){ if(resumeAfter) tryResume(); });
   try{
     mo1.observe(document.body,{subtree:true, attributes:true, attributeFilter:['class','style','hidden']});
     mo2.observe(document.body,{subtree:true, childList:true});
@@ -742,12 +762,13 @@ async function startCamera(){
 
   function onDetected(code){
     if(!code) return;
-    var now = Date.now();
+    var now=Date.now();
     if(code===lastCode && (now-lastHit)<900) return;
     lastCode=code; lastHit=now;
     if(code.length===13 && !isValidEAN13(code)) return;
 
     stopCamera().then(function(){
+      resetNoDetTimer();
       window.closeCam();
       resumeAfter=true; tryResume();
       var p = findProduct(code);
@@ -764,14 +785,15 @@ async function startCamera(){
   }
 
   function bind(){
-    var cam = $('btnCam'); if(cam){ cam.addEventListener('click', function(){ window.__priceViewMode=false; window.openCam(); }); }
-    var pv = $('btnPriceView'); if(pv){ pv.addEventListener('click', function(){ window.__priceViewMode=true; window.openCam(); }); }
+    var cam=$('btnCam'); if(cam){ cam.addEventListener('click', function(){ window.__priceViewMode=false; window.openCam(); }); }
+    var pv=$('btnPriceView'); if(pv){ pv.addEventListener('click', function(){ window.__priceViewMode=true; window.openCam(); }); }
     window.__openCam = function(){ window.__priceViewMode=false; window.openCam(); };
     window.__startPriceView = function(){ window.__priceViewMode=true; window.openCam(); };
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bind); else bind();
 })();
 </script>
+
 </body>
 </html
 <!-- ===== Mobil Kamera (Native-first) — INLINE ===== -->
