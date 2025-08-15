@@ -82,7 +82,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .pdfBox{width:min(95vw,920px);height:90vh;display:flex;flex-direction:column}
 .pdfFrame{flex:1;border:1px solid var(--line);border-radius:8px}
 </style>
-
+<style>#btnCamV3{display:none!important}</style>
 </head>
 <body>
 <header>
@@ -100,10 +100,14 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <div class="control">
         <button id="btnCart" class="btn neutral" style="font-size:16px"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
         <button id="btnPrint" class="btn success" style="font-size:16px"><i class="fa-solid fa-print"></i> Yazdır</button>
-        <button id="btnPriceView" class="btn warning" style="font-size:16px" onclick="window.openCamV3 && window.openCamV3(true)">
+        <button id="btnPriceView" class="btn warning" style="font-size:16px" onclick="window.__startPriceView && window.__startPriceView()">
           <i class="fa-solid fa-tag"></i> Fiyat Gör
         </button>
-        </div>
+        <button id="btnCam" class="btn primary" style="font-size:16px" onclick="window.__openCam && window.__openCam()">
+          <i class="fa-solid fa-camera"></i> Kamera Aç
+        </button>
+
+      </div>
     </div>
 
     <div class="control" style="margin-top:8px">
@@ -257,18 +261,7 @@ function openProduct(p){
   mdl.classList.add('shown');
   mdl.querySelectorAll('[data-qty]').forEach(b=> b.onclick=()=> addToCart(p,parseInt(b.dataset.qty),old));
   $('btnCustom').onclick=()=>{ const q=parseInt(prompt('Kaç adet?','1')); if(q>0) addToCart(p,q,old); };
-  $('btnCancel').onclick=()=>{ mdl.classList.remove('shown'); refocusAfterAction(true); 
-    try {
-        // Kamera otomatik tekrar açma
-        if (typeof window.openCamV3 === 'function') {
-            setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); 
-    try {
-        setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
-    } catch(e){}
-}, 400);
-        }
-    } catch(e){}
-};
+  $('btnCancel').onclick=()=>{ mdl.classList.remove('shown'); refocusAfterAction(true); };
 }
 function addToCart(p,qty,isOld){
   const idx = CART.findIndex(x => x.barcode === p.barcode);
@@ -277,18 +270,7 @@ function addToCart(p,qty,isOld){
   setCart(CART);
   mdl.classList.remove('shown');
   beep(true);
-  
-    try {
-        // Kamera otomatik tekrar açma
-        if (typeof window.openCamV3 === 'function') {
-            setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
-        }
-    } catch(e){}
-
-    try {
-        setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
-    } catch(e){}
-refocusAfterAction(true);
+  refocusAfterAction(true);
 }
 
 /* ===== CART MODAL ===== */
@@ -663,18 +645,7 @@ if(window.__DEV_TEST__) runTests();
           clearPV();
           mdl.classList.remove('shown');
           try{ window.__priceViewMode=false; }catch(e){}
-          try{ 
-    try {
-        // Kamera otomatik tekrar açma
-        if (typeof window.openCamV3 === 'function') {
-            setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
-        }
-    } catch(e){}
-
-    try {
-        setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
-    } catch(e){}
-refocusAfterAction(true); }catch(e){}
+          try{ refocusAfterAction(true); }catch(e){}
         }
       }, step);
       mdl.classList.add('shown');
@@ -685,18 +656,7 @@ refocusAfterAction(true); }catch(e){}
           clearPV();
           mdl.classList.remove('shown');
           try{ window.__priceViewMode=false; }catch(e){}
-          try{ 
-    try {
-        // Kamera otomatik tekrar açma
-        if (typeof window.openCamV3 === 'function') {
-            setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
-        }
-    } catch(e){}
-
-    try {
-        setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
-    } catch(e){}
-refocusAfterAction(true); }catch(e){}
+          try{ refocusAfterAction(true); }catch(e){}
           if(_old) try{ _old(); }catch(e){}
         };
       }
@@ -1014,17 +974,11 @@ refocusAfterAction(true); }catch(e){}
     var now=Date.now();
     if(code===lastCode && (now-lastHit)<900) return;
     lastCode=code; lastHit=now;
+    if(code.length===13 && !isValidEAN13(code)) return;
 
-    var p = findProduct(code);
-    if(p){
-        stopCamera();
-        if(window.__priceViewMode && typeof openPriceView6s==='function'){
-            openPriceView6s(p);
-        } else if(typeof window.openProduct==='function'){
-            window.openProduct(p);
-        }
-    }
-}catch(e){}
+    pauseDetection(true);
+    resetNoDetTimer();
+    try{ window.closeCam(); }catch(e){}
       resumeAfter=true; tryResume();
       // normalize products if not yet
       try{ if(Array.isArray(window.PRODUCTS) && !window.__productsNormalized) window.normalizeProductsInPlace(); }catch(e){}
