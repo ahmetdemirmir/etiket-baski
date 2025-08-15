@@ -82,8 +82,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .pdfBox{width:min(95vw,920px);height:90vh;display:flex;flex-direction:column}
 .pdfFrame{flex:1;border:1px solid var(--line);border-radius:8px}
 </style>
-
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 </head>
 <body>
 <header>
@@ -513,55 +511,305 @@ if(window.__DEV_TEST__) runTests();
 </script>
 </body>
 </html
-<div id="mdlCam" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:9998">
-  <div class="box" style="width:min(96vw,640px);max-height:90vh;overflow:auto;padding:10px 10px 14px;background:#fff;border-radius:12px;margin:5vh auto">
-    <h3 style="margin:6px 10px 6px">Barkod Tara</h3>
-    <div style="display:flex;gap:8px;align-items:center;margin:4px 10px 8px">
-      <select id="camSelect" class="input" style="min-width:200px;flex:1"></select>
-      <button id="btnCamPause" class="btn neutral">Durdur</button>
-      <button id="btnCamClose" class="btn danger">Kapat</button>
-    </div>
-    <div id="reader" style="width:100%;border:1px solid #d6dbe6;border-radius:12px;overflow:hidden"></div>
-  </div>
-</div>
-
 <script>
 (function(){
+  'use strict';
+  // ---- Helpers
   function $(id){ return document.getElementById(id); }
-  function addBtn(){ if(!document.getElementById('btnCam')){ var b=document.createElement('button'); b.id='btnCam'; b.className='btn primary'; b.style.marginLeft='8px'; b.innerHTML='<i class="fa-solid fa-camera"></i> Kamera'; var bars=document.querySelectorAll('.control'); if(bars.length) bars[0].appendChild(b); else document.body.appendChild(b);} }
-  var cam=null, paused=false, lastCode='', lastTs=0;
-  function validEAN13(c){ if(!/^\d{13}$/.test(c)) return false; var s=c.split('').map(Number), sum=0; for(var i=0;i<12;i++) sum+=s[i]*(i%2?3:1); return ((10-(sum%10))%10)===s[12]; }
-  function beepSafe(ok){ try{ if(typeof beep==='function') beep(ok); else if(navigator.vibrate) navigator.vibrate(ok?[35]:[15,30,15]); }catch(e){} }
-  async function start(id){
-    if(cam){ try{ await cam.stop(); }catch(e){} }
-    cam=new Html5Qrcode('reader',{verbose:false});
-    await cam.start({deviceId:{exact:id}}, {fps:18, qrbox:{width:320,height:200}, aspectRatio:1.777, rememberLastUsedCamera:true, formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128]}, onScan, function(){});
-    paused=false; $('btnCamPause').textContent='Durdur';
+  function create(tag, props, styles){
+    var el = document.createElement(tag);
+    if (props) Object.keys(props).forEach(function(k){ el[k]=props[k]; });
+    if (styles) Object.keys(styles).forEach(function(k){ el.style[k]=styles[k]; });
+    return el;
   }
-  function onScan(txt){
-    var now=Date.now(); var code=String(txt||'').replace(/\D/g,'');
-    if(!code) return; if(code===lastCode && (now-lastTs)<1200) return; lastCode=code; lastTs=now;
-    if(/^\d{13}$/.test(code) && !validEAN13(code)){ beepSafe(false); return; }
-    var inp=document.getElementById('inpBarcode'); if(inp){ inp.value=code.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); }
-    beepSafe(true);
-  }
-  async function openM(){
-    document.getElementById('mdlCam').style.display='block';
+  function beep(ok){
     try{
-      var devs=await Html5Qrcode.getCameras(); var sel=$('camSelect'); sel.innerHTML='';
-      devs.forEach(function(d,i){ var o=document.createElement('option'); o.value=d.id; o.textContent=d.label||('Kamera '+(i+1)); sel.appendChild(o); });
-      var back=devs.find(function(d){ return /back|arka|environment|rear/i.test(d.label||''); }); if(back) sel.value=back.id;
-      await start(sel.value); sel.onchange=async function(){ await start(sel.value); };
-    }catch(e){ alert('Kamera listesi alınamadı.'); }
+      if (typeof window.beep === 'function') window.beep(ok);
+      else if (navigator.vibrate) navigator.vibrate(ok ? [40] : [20, 30, 20]);
+    }catch(_e){}
   }
-  async function stopAll(){ try{ if(cam) await cam.stop(); }catch(e){} cam=null; document.getElementById('mdlCam').style.display='none'; }
+  function validEAN13(code){
+    if(!/^\d{13}$/.test(code)) return false;
+    var s = code.split('').map(Number);
+    var sum = 0;
+    for (var i=0;i<12;i++) sum += s[i] * (i%2?3:1);
+    var cd = (10 - (sum % 10)) % 10;
+    return cd === s[12];
+  }
+
+  // ---- UI bootstrap (button + modal overlay) ----
+  function ensureUI(){
+    // Kamera butonu
+    if(!$('btnCamV3')){
+      var btn = create('button', { id:'btnCamV3', className:'btn primary' });
+      btn.style.marginLeft = '8px';
+      btn.appendChild(create('i', { className:'fa-solid fa-camera' }));
+      btn.appendChild(document.createTextNode(' Kamera (Yeni)'));
+      var bars = document.querySelectorAll('.control');
+      if(bars.length){ bars[0].appendChild(btn); } else document.body.appendChild(btn);
+    }
+    if(!$('mdlCamV3')){
+      var overlay = create('div', { id:'mdlCamV3' }, { position:'fixed', left:'0', top:'0', right:'0', bottom:'0',
+        background:'rgba(0,0,0,.55)', display:'none', zIndex:'9998' });
+
+      var box = create('div', { className:'box' }, { width:'min(96vw,720px)', maxHeight:'92vh', overflow:'auto',
+        padding:'10px', background:'#fff', borderRadius:'12px', margin:'4vh auto' });
+
+      var title = create('h3', null, { margin:'6px 10px 10px' }); title.textContent='Barkod Tara (Yeni Motor)';
+      box.appendChild(title);
+
+      // Top bar controls
+      var bar = create('div', null, { display:'flex', gap:'8px', alignItems:'center', margin:'0 10px 8px', flexWrap:'wrap' });
+      var sel = create('select', { id:'camSelectV3', className:'input' }, { minWidth:'220px', flex:'1' });
+      var torchWrap = create('label', null, { display:'flex', alignItems:'center', gap:'6px' });
+      var chkTorch = create('input', { id:'chkTorchV3', type:'checkbox' });
+      torchWrap.appendChild(chkTorch); torchWrap.appendChild(document.createTextNode('Flaş'));
+      var zoomWrap = create('div', null, { display:'flex', alignItems:'center', gap:'6px' });
+      zoomWrap.appendChild(document.createTextNode('Zoom'));
+      var rngZoom = create('input', { id:'rngZoomV3', type:'range' }, { width:'140px' });
+      rngZoom.min='1'; rngZoom.max='1'; rngZoom.step='0.1'; rngZoom.value='1';
+      var btnPause = create('button', { id:'btnCamPauseV3', className:'btn neutral' }); btnPause.textContent='Durdur';
+      var btnClose = create('button', { id:'btnCamCloseV3', className:'btn danger' }); btnClose.textContent='Kapat';
+      bar.appendChild(sel); bar.appendChild(torchWrap); bar.appendChild(zoomWrap); zoomWrap.appendChild(rngZoom);
+      bar.appendChild(btnPause); bar.appendChild(btnClose);
+      box.appendChild(bar);
+
+      // Video area
+      var container = create('div', null, { padding:'0 10px 10px' });
+      var video = create('video', { id:'camVideoV3', playsInline:true, autoplay:true, muted:true },
+                         { width:'100%', border:'1px solid #d6dbe6', borderRadius:'12px', background:'#000' });
+      var canvas = create('canvas', { id:'camCanvasV3' }, { display:'none' });
+      container.appendChild(video); container.appendChild(canvas);
+      box.appendChild(container);
+
+      var hint = create('small', { className:'hint' }, { display:'block', margin:'0 12px 4px', color:'#64748b' });
+      hint.textContent='İpucu: Ürüne 15–25 cm yaklaşın. Odak zayıfsa zoom’u artırın veya ışığı açın.';
+      box.appendChild(hint);
+
+      overlay.appendChild(box);
+      overlay.addEventListener('click', function(ev){ if(ev.target && ev.target.id==='mdlCamV3'){ stopAll(); }});
+      document.body.appendChild(overlay);
+    }
+  }
+  function show(){ $('mdlCamV3').style.display='block'; }
+  function hide(){ $('mdlCamV3').style.display='none'; }
+
+  // ---- Camera engine (native-first) ----
+  var stream=null, track=null, detector=null, running=false, paused=false;
+  var lastCode='', lastTs=0, failCount=0;
+
+  function isBarcodeDetectorSupported(){
+    try{ return ('BarcodeDetector' in window); }catch(e){ return false; }
+  }
+
+  async function listCameras(){
+    var devs = await navigator.mediaDevices.enumerateDevices();
+    return devs.filter(function(d){ return d.kind==='videoinput'; });
+  }
+
+  async function start(deviceId){
+    if(stream) await stop();
+    var constraints = { audio:false, video:{
+      deviceId: deviceId ? { exact: deviceId } : undefined,
+      facingMode: deviceId ? undefined : { ideal:'environment' },
+      width: { ideal: 1920 },
+      height:{ ideal: 1080 },
+      frameRate:{ ideal: 30 }
+    }};
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    var v = $('camVideoV3'); v.srcObject = stream;
+    track = stream.getVideoTracks()[0];
+    // Focus/Zoom/Torch capabilities
+    var caps = track.getCapabilities ? track.getCapabilities() : {};
+    var sets = track.getSettings ? track.getSettings() : {};
+    // Try to enforce continuous focus if supported
+    try{ await track.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); }catch(_e){}
+    // Zoom UI
+    var rng = $('rngZoomV3');
+    if(caps.zoom){
+      rng.min = caps.zoom.min || 1;
+      rng.max = caps.zoom.max || 1;
+      rng.step = caps.zoom.step || 0.1;
+      rng.value= sets.zoom || rng.min;
+      rng.disabled = false;
+    }else{ rng.min='1'; rng.max='1'; rng.value='1'; rng.disabled = true; }
+    // Torch UI
+    $('chkTorchV3').disabled = !caps.torch;
+    paused=false; running=true; $('btnCamPauseV3').textContent='Durdur';
+
+    if(isBarcodeDetectorSupported()){
+      try{
+        var fmts = (BarcodeDetector.getSupportedFormats && await BarcodeDetector.getSupportedFormats()) || [];
+        if(fmts.length){
+          detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128'] });
+        }else{
+          detector = new BarcodeDetector();
+        }
+      }catch(_e){ detector = null; }
+    }else{
+      detector = null;
+      // As a last resort, lazy-load ZXing UMD and use frame-by-frame decoding
+      loadZXing().catch(function(){});
+    }
+    requestAnimationFrame(loop);
+  }
+
+  async function stop(){
+    running=false;
+    try{ if(track) track.stop(); }catch(_e){}
+    try{ if(stream) stream.getTracks().forEach(function(t){ try{t.stop();}catch(_e){} }); }catch(_e){}
+    stream=null; track=null; detector=null;
+  }
+  async function stopAll(){ await stop(); hide(); }
+
+  async function loop(){
+    if(!running || paused){ return; }
+    var v = $('camVideoV3');
+    if(v.readyState < 2){ requestAnimationFrame(loop); return; }
+
+    // Native path
+    if(detector){
+      try{
+        var arr = await detector.detect(v);
+        if(arr && arr.length){
+          onCode(arr[0].rawValue || '');
+          failCount = 0;
+        }else onFail();
+      }catch(_e){ onFail(); }
+      requestAnimationFrame(loop); return;
+    }
+
+    // ZXing fallback path (if loaded)
+    if(window.ZXingBrowser && window.ZXing){
+      if(!window.__ZXCtrl){
+        // Create hidden canvas to capture frames
+        var canvas = $('camCanvasV3');
+        canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+        var ctx = canvas.getContext('2d');
+        // Init reader
+        var codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+        // Manual frame decode loop
+        (async function decodeFrame(){
+          if(!running || paused){ return; }
+          try{
+            ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+            var result = await codeReader.decodeFromCanvas(canvas);
+            if(result && result.text) { onCode(result.text); failCount=0; }
+            else onFail();
+          }catch(_e){ onFail(); }
+          requestAnimationFrame(decodeFrame);
+        })();
+        window.__ZXCtrl = true;
+        return;
+      }
+    }
+    onFail(); requestAnimationFrame(loop);
+  }
+
+  function onFail(){
+    failCount++;
+    // Zoom-on-Fail: every 40 cycles, nudge zoom up a bit if supported
+    if(track && track.getCapabilities){
+      var caps = track.getCapabilities();
+      if(caps.zoom && failCount % 40 === 0){
+        var s = track.getSettings();
+        var step = caps.zoom.step || 0.25;
+        var next = Math.min((s.zoom||1) + step, (caps.zoom.max||s.zoom||1));
+        track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
+        $('rngZoomV3').value = next;
+      }
+    }
+  }
+
+  function onCode(text){
+    var now = Date.now();
+    var code = String(text||'').replace(/\D/g,'');
+    if(!code) return;
+    if(code===lastCode && (now-lastTs)<1200) return;
+    lastCode = code; lastTs = now;
+    if(/^\d{13}$/.test(code) && !validEAN13(code)){ beep(false); return; }
+    var inp = document.getElementById('inpBarcode');
+    if(inp){ inp.value = code.slice(-6); inp.dispatchEvent(new Event('input',{ bubbles:true })); }
+    beep(true);
+    try{
+      if(window.PRODUCTS && Array.isArray(PRODUCTS)){
+        var m = PRODUCTS.find(function(p){ return String(p.barcode||'').replace(/\D/g,'')===code; });
+        if(m && typeof openProduct==='function'){
+          var ms=document.getElementById('mdlSearch'); if(ms) ms.classList.remove('shown');
+          openProduct(m);
+        }
+      }
+    }catch(_e){}
+  }
+
+  // ---- Controls
+  function bindControls(){
+    var rng = $('rngZoomV3');
+    rng.addEventListener('input', function(){
+      if(!track || !track.applyConstraints) return;
+      var z = parseFloat(rng.value||'1');
+      track.applyConstraints({ advanced:[{ zoom: z }] }).catch(function(){});
+    });
+    $('chkTorchV3').addEventListener('change', function(){
+      if(!track || !track.applyConstraints) return;
+      var on = $('chkTorchV3').checked;
+      track.applyConstraints({ advanced:[{ torch: !!on }] }).catch(function(){ $('chkTorchV3').checked=false; });
+    });
+    $('camVideoV3').addEventListener('click', function(){
+      // Tap-to-zoom micro bump to encourage autofocus
+      if(!track || !track.getCapabilities) return;
+      var caps = track.getCapabilities(); if(!caps.zoom) return;
+      var cur = parseFloat(($('rngZoomV3').value)||'1');
+      var next = Math.min(cur + (caps.zoom.step||0.25), caps.zoom.max||cur);
+      $('rngZoomV3').value = next;
+      track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
+    });
+  }
+
+  async function openModal(){
+    show();
+    try{
+      var cams = await listCameras();
+      var sel = $('camSelectV3'); sel.innerHTML='';
+      cams.forEach(function(d,i){
+        var o = document.createElement('option');
+        o.value = d.deviceId; o.textContent = d.label || ('Kamera '+(i+1));
+        sel.appendChild(o);
+      });
+      var back = cams.find(function(d){ return /back|arka|environment|rear/i.test(d.label||''); });
+      sel.value = back ? back.deviceId : (cams[0] ? cams[0].deviceId : '');
+      await start(sel.value);
+      sel.onchange = async function(){ await start(sel.value); };
+    }catch(e){
+      alert('Kamera listesi alınamadı. Tarayıcı izni gerekli olabilir.');
+    }
+  }
+
+  async function loadZXing(){
+    if(window.ZXingBrowser && window.ZXing) return;
+    function inject(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=function(){rej(new Error('Yüklenemedi: '+src));}; document.head.appendChild(s); }); }
+    // ZXing UMD
+    await inject('https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js');
+    await inject('https://unpkg.com/@zxing/browser@0.0.10/umd/index.min.js');
+  }
+
   function wire(){
-    var b=document.getElementById('btnCam'); if(b && !b.__wired){ b.__wired=true; b.addEventListener('click', openM); }
-    var bc=document.getElementById('btnCamClose'); if(bc && !bc.__wired){ bc.__wired=true; bc.addEventListener('click', stopAll); }
-    var bp=document.getElementById('btnCamPause'); if(bp && !bp.__wired){ bp.__wired=true; bp.addEventListener('click', async function(e){ if(!cam) return; if(!paused){ try{ await cam.pause(true); }catch(_e){} paused=true; e.target.textContent='Devam Et'; } else { try{ await cam.resume(); }catch(_e){} paused=false; e.target.textContent='Durdur'; } }); }
+    var b = $('btnCamV3'); if(b && !b.__wired){ b.__wired = true; b.addEventListener('click', function(){ openModal(); }); }
+    var bc = $('btnCamCloseV3'); if(bc && !bc.__wired){ bc.__wired = true; bc.addEventListener('click', function(){ stopAll(); }); }
+    var bp = $('btnCamPauseV3'); if(bp && !bp.__wired){ bp.__wired = true; bp.addEventListener('click', function(e){
+      if(!running) return;
+      if(!paused){ paused = true; e.target.textContent='Devam Et'; }
+      else { paused=false; e.target.textContent='Durdur'; requestAnimationFrame(loop); }
+    }); }
+    window.addEventListener('pagehide', stopAll);
   }
-  document.addEventListener('DOMContentLoaded', function(){ addBtn(); wire(); });
-  var mo=new MutationObserver(wire); mo.observe(document.body,{childList:true,subtree:true});
+
+  // ---- Init
+  document.addEventListener('DOMContentLoaded', function(){
+    ensureUI(); bindControls(); wire();
+  });
+  var mo = new MutationObserver(wire);
+  mo.observe(document.body, { childList:true, subtree:true });
 })();
 </script>
 >
