@@ -582,6 +582,7 @@ if(window.__DEV_TEST__) runTests();
 // Clean camera integration using BarcodeDetector; robust matching; AbortError-hardened; 7s timeout
 (function(){
   var stream=null, scanning=false, starting=false, rafId=null, noDetTimer=null;
+  var quaggaLoaded=false, quaggaRunning=false, quaggaLoading=false;
   var resumeAfter=false, resumeDebounce=null;
   var lastCode=null, lastHit=0;
   var sheet=null, video=null;
@@ -589,6 +590,59 @@ if(window.__DEV_TEST__) runTests();
   function $(id){ return document.getElementById(id); }
 
   function setBtnBusy(b){ try{ var cam=$('btnCam'); if(cam) cam.disabled=b; var pv=$('btnPriceView'); if(pv) pv.disabled=b; }catch(e){} }
+
+  function loadQuagga(){
+    return new Promise(function(resolve, reject){
+      if(quaggaLoaded) return resolve();
+      if(quaggaLoading) { var t=setInterval(function(){ if(quaggaLoaded){ clearInterval(t); resolve(); } }, 50); return; }
+      quaggaLoading = true;
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/@ericblade/quagga2/dist/quagga.js';
+      s.onload = function(){ quaggaLoaded = true; resolve(); };
+      s.onerror = function(){ alert('Quagga kütüphanesi yüklenemedi. Ağ/Firewall engeli olabilir.'); reject(new Error('quagga-load-failed')); };
+      document.head.appendChild(s);
+    });
+  }
+  function startQuagga(){
+    return new Promise(async function(resolve, reject){
+      try{
+        await loadQuagga();
+        var mount = document.getElementById('camMount');
+        if(!mount){ return reject(new Error('camMount not found')); }
+        mount.innerHTML = ''; // Quagga kendi canvas/video'sini basar
+        var cfg = {
+          inputStream: {
+            type: 'LiveStream',
+            target: mount,
+            constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+            area: { top: '15%', right: '10%', left: '10%', bottom: '15%' }
+          },
+          locator: { patchSize: 'large', halfSample: false },
+          numOfWorkers: Math.max(1, (navigator.hardwareConcurrency || 2) - 1),
+          frequency: 12,
+          decoder: { readers: ['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader','code_39_reader'] },
+          locate: true
+        };
+        Quagga.init(cfg, function(err){
+          if(err){ alert('Quagga init hatası: ' + err); return reject(err); }
+          Quagga.start(); quaggaRunning = true;
+          try{ Quagga.offDetected && Quagga.offDetected(); }catch(e){}
+          Quagga.onDetected(function(res){
+            try{
+              var code = res && res.codeResult && res.codeResult.code ? String(res.codeResult.code) : '';
+              if(code){ onDetected(code); }
+            }catch(e){}
+          });
+          resolve();
+        });
+      }catch(e){ reject(e); }
+    });
+  }
+  function stopQuagga(){
+    try{ if(quaggaRunning && window.Quagga){ Quagga.offDetected && Quagga.offDetected(); Quagga.stop(); } }catch(e){}
+    quaggaRunning = false;
+  }
+
 
   function resetNoDetTimer(){ try{ if(noDetTimer){ clearTimeout(noDetTimer); noDetTimer=null; } }catch(e){} }
   function armNoDetTimer(){
@@ -646,12 +700,29 @@ if(window.__DEV_TEST__) runTests();
   };
   window.closeCam = function(){ stopCamera().then(function(){ resetNoDetTimer(); starting=false; setBtnBusy(false); sheet.style.display='none'; }); };
 
-  async function startCamera(){
-    if(starting || scanning) return;
+  
+async function startCamera(){
+    if(starting || scanning || quaggaRunning) return;
     starting = true;
-    if(!('BarcodeDetector' in window)){
-      alert('Tarayıcı bu cihazda BarcodeDetector desteklemiyor. En güncel Chrome / Edge deneyin.');
-      starting=false; setBtnBusy(false);
+    // Prefer BarcodeDetector if available **and** supports EAN/UPC
+    var canBD = 'BarcodeDetector' in window;
+    var supportsEAN = false;
+    if(canBD){
+      try{
+        var supported = await BarcodeDetector.getSupportedFormats();
+        supportsEAN = supported.includes('ean-13') || supported.includes('ean_13') || supported.includes('upc-a') || supported.includes('upc_a');
+      }catch(e){ canBD = false; }
+    }
+    if(!canBD || !supportsEAN){
+      // Fallback to Quagga2
+      try{
+        await startQuagga();
+        starting = false; setBtnBusy(false);
+        armNoDetTimer();
+      }catch(e){
+        starting = false; setBtnBusy(false);
+        alert('Kamera başlatma hatası (fallback): ' + e);
+      }
       return;
     }
     try{
@@ -661,17 +732,8 @@ if(window.__DEV_TEST__) runTests();
       const detector = fmts.length ? new BarcodeDetector({ formats: fmts }) : new BarcodeDetector();
       stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} }, audio:false });
       video.srcObject = stream;
-      await new Promise(res => {
-        try{ if(video.readyState>=2) res(); else video.onloadedmetadata=()=>res(); }catch(_){ res(); }
-      });
-      try{
-        await video.play();
-      }catch(err){
-        if(err && err.name==='AbortError'){
-          await new Promise(r=>setTimeout(r,80));
-          await video.play();
-        }else{ throw err; }
-      }
+      await new Promise(res => { try{ if(video.readyState>=2) res(); else video.onloadedmetadata=()=>res(); }catch(_){ res(); } });
+      try{ await video.play(); }catch(err){ if(err && err.name==='AbortError'){ await new Promise(r=>setTimeout(r,80)); await video.play(); } else { throw err; } }
       scanning = true;
       starting = false;
       setBtnBusy(false);
@@ -682,7 +744,7 @@ if(window.__DEV_TEST__) runTests();
           const codes = await detector.detect(video);
           if(codes && codes.length){
             let raw = (codes[0].rawValue ?? codes[0].value ?? '').toString();
-            let m = raw.match(/\\d{8,}/g); const code = m ? m.sort((a,b)=>b.length-a.length)[0] : raw;
+            let m = raw.match(/\d{8,}/g); const code = m ? m.sort((a,b)=>b.length-a.length)[0] : raw;
             onDetected(code);
             return;
           }
@@ -695,12 +757,13 @@ if(window.__DEV_TEST__) runTests();
       alert('Kamera başlatma hatası: '+ e);
     }
   }
+function stopCamera(){
 
-  function stopCamera(){
     return new Promise(function(resolve){
       scanning=false; starting=false;
       try{ rafId && cancelAnimationFrame(rafId); }catch(e){}
       try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); } }catch(e){}
+      try{ stopQuagga(); }catch(e){}
       try{ if(video){ video.srcObject=null; } }catch(e){}
       resolve();
     });
