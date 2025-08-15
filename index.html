@@ -100,7 +100,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
         <button id="btnCart" class="btn neutral" style="font-size:16px"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
         <button id="btnPrint" class="btn success" style="font-size:16px"><i class="fa-solid fa-print"></i> Yazdır</button>
         <button id="btnPriceView" class="btn warning" style="font-size:16px"><i class="fa-solid fa-tag"></i> Fiyat Gör</button>
-        <button id="btnCamV3" class="btn primary" style="font-size:16px"><i class="fa-solid fa-camera"></i> Kamera Aç</button>
+        <button id="btnCamX" class="btn primary" style="font-size:16px"><i class="fa-solid fa-camera"></i> Kamera Aç</button>
 
       </div>
     </div>
@@ -531,19 +531,13 @@ if(window.__DEV_TEST__) runTests();
       document.getElementById('mDateRow').style.display = d? 'block':'none';
       var old = isOld(p);
       document.getElementById('mOld').style.display = old? 'block':'none';
-
       mdl.querySelectorAll('[data-qty], #btnCustom').forEach(function(el){ el.style.display='none'; });
       var cancelBtn = document.getElementById('btnCancel'); if(cancelBtn){ cancelBtn.style.display=''; }
-
       clearPV();
       var box = mdl.querySelector('.box');
       var wrap = document.createElement('div'); wrap.id='pvWrap'; wrap.style.marginTop='8px';
-      wrap.innerHTML = '<div style="font-size:12px;opacity:.8">Bu pencere <b><span id="pvSec">6</span>s</b> sonra kapanacak</div>\
-      <div style="position:relative;height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:6px">\
-        <div id="pvBar" style="position:absolute;left:0;top:0;height:100%;width:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));transition:width .1s"></div>\
-      </div>';
+      wrap.innerHTML = '<div style="font-size:12px;opacity:.8">Bu pencere <b><span id="pvSec">6</span>s</b> sonra kapanacak</div>      <div style="position:relative;height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:6px">        <div id="pvBar" style="position:absolute;left:0;top:0;height:100%;width:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));transition:width .1s"></div>      </div>';
       box.appendChild(wrap);
-
       var left=6000, step=100;
       var bar=document.getElementById('pvBar'), sec=document.getElementById('pvSec');
       timer=setInterval(function(){
@@ -558,9 +552,7 @@ if(window.__DEV_TEST__) runTests();
           try{ refocusAfterAction(true); }catch(e){}
         }
       }, step);
-
       mdl.classList.add('shown');
-
       if(cancelBtn){
         var _old = cancelBtn.onclick;
         cancelBtn.onclick = function(){
@@ -573,15 +565,13 @@ if(window.__DEV_TEST__) runTests();
       }
     }catch(e){ console.warn('openPriceView error', e); }
   };
-
   function bindPV(){
     var pv=document.getElementById('btnPriceView');
     if(pv && !pv.__bound){
       pv.__bound=true;
       pv.addEventListener('click', function(){
         try{ window.__priceViewMode=true; }catch(e){}
-        var cam=document.getElementById('btnCamV3');
-        if(cam){ cam.click(); } else { console.warn('btnCamV3 yok'); }
+        var cam=document.getElementById('btnCamX'); if(cam){ cam.click(); }
       });
     }
   }
@@ -590,6 +580,7 @@ if(window.__DEV_TEST__) runTests();
 })();
 </script>
 
+<script src="camx.js"></script>
 </body>
 </html
 <!-- ===== Mobil Kamera (Native-first) — INLINE ===== -->
