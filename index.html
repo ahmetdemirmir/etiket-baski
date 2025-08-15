@@ -116,90 +116,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   <span id="btnFetchSheetHint" class="hint" style="margin-left:8px;color:#64748b"></span>
 </div>
 
-<script>
-(function(){
-  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
-
-  function normalizeHeader(h){
-    return (h||"").toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-      .replace(/\s+/g,' ').trim();
-  }
-
-  async function fetchCSV() {
-    const btn = document.getElementById('btnFetchSheet');
-    const hint = document.getElementById('btnFetchSheetHint');
-    const fileInput = document.getElementById('fileExcel');
-    if(!btn || !hint || !fileInput) return;
-
-    btn.disabled = true; btn.setAttribute('aria-busy','true');
-    hint.textContent = "İndiriliyor...";
-
-    try{
-      const resp = await fetch(CSV_URL, {cache: 'no-store'});
-      if(!resp.ok) throw new Error("HTTP " + resp.status);
-      const text = await resp.text();
-
-      const firstLine = text.split(/\r?\n/)[0] || "";
-      const headers = [];
-      let cur = "", inQ = false;
-      for (let i=0;i<firstLine.length;i++){
-        const ch = firstLine[i];
-        if (ch === '"'){
-          if (inQ && firstLine[i+1] === '"'){ cur += '"'; i++; }
-          else inQ = !inQ;
-        } else if (ch === ',' && !inQ) { headers.push(cur); cur = ""; }
-        else { cur += ch; }
-      }
-      headers.push(cur);
-
-      const norm = headers.map(normalizeHeader);
-      const hasBarkod = norm.some(h => ['barkod','ean','ean13','barkod no','barkod numarasi','barkod numarası'].includes(h));
-      const hasAd     = norm.some(h => ['stok adi','urun adi','ürün adı','ad'].includes(h));
-      const hasFiyat  = norm.some(h => ['magaza','mağaza','satis fiyati 1','satış fiyatı 1','fiyat'].includes(h));
-      const hasTarih  = norm.some(h => ['fiyat degisiklik tarihi','fiyat değişiklik tarihi','fiyat tarih','fdt','tarih'].includes(h));
-
-      if(!(hasBarkod && hasAd && hasFiyat)){
-        hint.textContent = "Başlıklar uyumsuz (Barkod / Ad / Mağaza zorunlu).";
-        throw new Error("Required headers missing.");
-      }
-
-      const bom = new Uint8Array([0xEF,0xBB,0xBF]);
-      const blob = new Blob([bom, text], {type: "text/csv"});
-      const file = new File([blob], "guncel.csv", {type: "text/csv", lastModified: Date.now()});
-
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      fileInput.files = dt.files;
-      fileInput.dispatchEvent(new Event('change', {bubbles: true}));
-
-      hint.textContent = "Tamam: CSV içeri alındı.";
-    }catch(err){
-      console.error(err);
-      hint.textContent = "İndirme/işleme hatası. Ağ veya başlıkları kontrol edin.";
-      alert("Güncel liste alınamadı: " + err.message);
-    }finally{
-      const btn = document.getElementById('btnFetchSheet');
-      if(btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); }
-      setTimeout(() => { const h=document.getElementById('btnFetchSheetHint'); if(h && h.textContent.startsWith("Tamam")) h.textContent=""; }, 4000);
-    }
-  }
-
-  function wire(){
-    const b1 = document.getElementById('btnFetchSheet');
-    if(b1) b1.addEventListener('click', fetchCSV);
-
-    const b2 = document.getElementById('btnOpenCam');
-    if(b2) b2.addEventListener('click', () => {
-      try{ if(typeof startCamera === 'function') startCamera(); }catch(e){ console.error(e); alert("Kamera açılamadı: "+e.message); }
-    });
-  }
-
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
-  else wire();
-})();
-</script>
-
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; **KAMERA ile okutunca ürün popup'ı direkt açılır**.</small>
   </div>
@@ -599,4 +515,123 @@ async function makeOldListDoc(){
 })(); // IIFE
 </script>
 </body>
-</html>
+</html
+<script>
+(() => {
+  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
+
+  function norm(s){
+    return (s||"").replace(/^\uFEFF/,'') // strip BOM at start
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // accents
+      .replace(/[._\-()/]/g,' ') // punct -> space
+      .replace(/\s+/g,' ').trim();
+  }
+
+  // Parse one CSV line respecting quotes, with chosen delimiter
+  function splitCSV(line, delim){
+    const out=[]; let cur=""; let q=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch === '"'){
+        if(q && line[i+1] === '"'){ cur+='"'; i++; } else { q=!q; }
+      }else if(ch === delim && !q){
+        out.push(cur); cur="";
+      }else{
+        cur+=ch;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+
+  // Decide delimiter: prefer comma, but if semicolons dominate, use ';'
+  function pickDelimiter(sample){
+    const c = (sample.match(/,/g)||[]).length;
+    const s = (sample.match(/;/g)||[]).length;
+    return s>c ? ';' : ',';
+  }
+
+  function scoreHeaders(hs){
+    const H = hs.map(norm);
+    let score = 0;
+    const hasB = H.some(h=>/^(barkod|ean|ean13|barkod no|barkod numarasi|barkod numarası)$/.test(h));
+    const hasA = H.some(h=>/^(stok adi|urun adi|ürün adı|ad|stok|urun|ürün)$/.test(h));
+    const hasF = H.some(h=>/^(magaza|mağaza|magaza fiyati|mağaza fiyati|satis fiyati 1|satış fiyatı 1|fiyat|satis fiyati|satış fiyatı)$/.test(h));
+    const hasT = H.some(h=>/^(fiyat degisiklik tarihi|fiyat değişiklik tarihi|fiyat tarih|fdt|tarih)$/.test(h));
+    if(hasB) score+=3; if(hasA) score+=2; if(hasF) score+=3; if(hasT) score+=1;
+    return {score, hasB, hasA, hasF, hasT};
+  }
+
+  async function fetchCSV(){
+    const btn = document.getElementById('btnFetchSheet');
+    const hint = document.getElementById('btnFetchSheetHint');
+    const fileInput = document.getElementById('fileExcel');
+    if(!btn || !hint || !fileInput) return;
+
+    btn.disabled = true; btn.setAttribute('aria-busy','true');
+    hint.textContent = "İndiriliyor...";
+
+    try{
+      const resp = await fetch(CSV_URL, {cache:'no-store'});
+      if(!resp.ok) throw new Error("HTTP "+resp.status);
+      const text = await resp.text();
+
+      // Look at the first 5 non-empty lines to find the best header row
+      const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0).slice(0,5);
+      const delim = pickDelimiter(lines.join('\n'));
+      let best = {score:-1, idx:0, hs:[]};
+      for(let i=0;i<lines.length;i++){
+        const hs = splitCSV(lines[i], delim);
+        const sc = scoreHeaders(hs);
+        if(sc.score > best.score) best = {score: sc.score, idx:i, hs, meta:sc};
+      }
+
+      if(!(best.meta && best.meta.hasB && best.meta.hasA && best.meta.hasF)){
+        hint.textContent = "Başlıklar uyumsuz (Barkod / Ad / Mağaza zorunlu).";
+        throw new Error("Required headers missing.");
+      }
+
+      // If header row wasn't the very first line, rebuild CSV so header line is first
+      let finalText = text;
+      if(best.idx !== 0){
+        const rows = text.split(/\r?\n/);
+        const header = rows.splice(best.idx,1)[0];
+        rows.unshift(header);
+        finalText = rows.join('\n');
+      }
+
+      const bom = new Uint8Array([0xEF,0xBB,0xBF]);
+      const blob = new Blob([bom, finalText], {type: "text/csv"});
+      const file = new File([blob], "guncel.csv", {type: "text/csv", lastModified: Date.now()});
+
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      fileInput.dispatchEvent(new Event('change', {bubbles:true}));
+
+      hint.textContent = "Tamam: CSV içeri alındı.";
+    }catch(err){
+      console.error(err);
+      hint.textContent = "İndirme/işleme hatası. Başlıkları ve bağlantıyı kontrol edin.";
+      alert("Güncel liste alınamadı: " + err.message);
+    }finally{
+      btn.disabled = false; btn.removeAttribute('aria-busy');
+      setTimeout(()=>{ if(hint.textContent.startsWith("Tamam")) hint.textContent=""; }, 4000);
+    }
+  }
+
+  function wire(){
+    const b1 = document.getElementById('btnFetchSheet');
+    if(b1) b1.addEventListener('click', fetchCSV);
+    const b2 = document.getElementById('btnOpenCam');
+    if(b2) b2.addEventListener('click', () => {
+      try{ if(typeof startCamera === 'function') startCamera(); }catch(e){ alert("Kamera açılamadı: "+e.message); }
+    });
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
+})();
+</script>
+>
