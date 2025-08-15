@@ -4,6 +4,38 @@
   var quaggaLoaded=false, quaggaLoading=false, quaggaRunning=false, initLock=false;
   var lastCode=null, lastHit=0; var camSheet=null, camMount=null;
 
+// === Global Modal Watcher: reopen camera ONLY after all modals are closed ===
+var resumeAfter=false, resumeDebounce=null;
+function isShown(node){
+  if(!node || node.nodeType!==1) return false;
+  if(node.hidden) return false;
+  var cs=getComputedStyle(node);
+  return !(cs.display==='none' || cs.visibility==='hidden' || parseFloat(cs.opacity)===0);
+}
+function countOpenModals(){
+  var nodes=document.querySelectorAll('.modal,[role=\"dialog\"],.popup,#popupOverlay,#branchPopupOverlay,#errorOverlay,#searchPopup,#exportPopup,#importPopup,#overwritePopup,.swal2-container,.swal2-shown,#mdlProduct,#mdlPdf');
+  var c=0; nodes.forEach(function(n){ if(isShown(n)) c++; });
+  return c;
+}
+function tryResume(){
+  clearTimeout(resumeDebounce);
+  resumeDebounce=setTimeout(function(){
+    if(!resumeAfter) return;
+    if(countOpenModals()===0){
+      resumeAfter=false;
+      try{ /*keep last mode*/ }catch(e){}
+      openCamSheet();
+    }
+  }, 300);
+}
+var mo1=new MutationObserver(function(){ if(resumeAfter) tryResume(); });
+var mo2=new MutationObserver(function(){ if(resumeAfter) tryResume(); });
+try{
+  mo1.observe(document.body,{subtree:true, attributes:true, attributeFilter:['class','style','hidden']});
+  mo2.observe(document.body,{subtree:true, childList:true});
+}catch(e){}
+
+
   function $(id){ return document.getElementById(id); }
 
   function ensureButtons(){
@@ -18,7 +50,7 @@
       var pv = document.createElement('button'); pv.id='btnPriceView'; pv.className='btn warning'; pv.style.fontSize='16px';
       pv.innerHTML='<i class="fa-solid fa-tag"></i> Fiyat Gör';
       btnPrint.insertAdjacentElement('afterend', pv);
-      pv.addEventListener('click', function(){ window.__priceViewMode=true; $('btnCamX').click(); });
+      pv.addEventListener('click', function(){ window.__priceViewMode=true; openCamSheet(); });
     }
   }
 
@@ -71,7 +103,7 @@
   }
 
   function closeCamSheet(){
-    stopQuagga().then(function(){ camSheet.style.display='none'; });
+    stopQuagga().then(function(){ closeCamSheet(); });
   }
 
   function startQuagga(){
@@ -138,9 +170,9 @@
     var now=Date.now(); if(code===lastCode && (now-lastHit)<900) return; lastCode=code; lastHit=now;
     if(code.length===13 && !isValidEAN13(code)) return;
 
-    stopQuagga().then(function(){
-      camSheet.style.display='none';
+    stopQuagga().then(function(){ closeCamSheet();
       var p = findProductByBarcode(code);
+      resumeAfter=true; tryResume();
       if (window.__priceViewMode && typeof window.openPriceView==='function' && p){
         window.openPriceView(p);
       } else if (typeof window.openProduct==='function' && p){
