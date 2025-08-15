@@ -214,8 +214,6 @@
       track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
     });
   }
-
-  async 
 // === Global Modal Resume Guard (robust) ===
 (function(){
   var _globalModalObserver = null;
@@ -285,7 +283,7 @@
   try{ ensureGlobalModalWatcher(); }catch(_e){}
   // When product found sets resumeAfter=true, they should call ensureGlobalModalWatcher again; patch below if needed.
 })();
-function openModal(){
+async function openModal(){
     foundLock = false;
     show();
     try{
