@@ -99,13 +99,19 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     <div class="control" style="margin-top:8px">
       <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off">
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off">
-      \1
-<div class="inline-flex items-center gap-2" style="margin-top:8px">
+      <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
+<div class="inline-flex items-center gap-2" style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
   <button id="btnFetchSheet" class="btn" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#d6dbe6);background:#0a66c2;color:white;cursor:pointer">
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <span>Güncel fiyat listesini al</span>
+  </button>
+  <button id="btnOpenCam" class="btn" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#d6dbe6);background:#10b981;color:white;cursor:pointer">
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M23 7l-7 5 7 5V7zM1 5h14v14H1z" fill="currentColor"/>
+    </svg>
+    <span>Kamerayı Aç</span>
   </button>
   <span id="btnFetchSheetHint" class="hint" style="margin-left:8px;color:#64748b"></span>
 </div>
@@ -508,21 +514,16 @@ async function makeOldListDoc(){
 
 })(); // IIFE
 </script>
-
+</body>
+</html
 <script>
 (() => {
   const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
-  const requiredHeaders = [
-    'barkod','ean','ean13','barkod no','barkod numarası',
-    'stok adı','ürün adı','ad',
-    'mağaza','satış fiyatı 1','fiyat',
-    'fiyat değişiklik tarihi','fiyat tarih','fdt','tarih'
-  ];
 
   function normalizeHeader(h){
-    return h.toLowerCase()
-            .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // remove diacritics
-            .replace(/\s+/g,' ').trim();
+    return (h||"").toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/\s+/g,' ').trim();
   }
 
   async function fetchCSV() {
@@ -531,8 +532,7 @@ async function makeOldListDoc(){
     const fileInput = document.getElementById('fileExcel');
     if(!btn || !hint || !fileInput) return;
 
-    btn.disabled = true;
-    btn.setAttribute('aria-busy','true');
+    btn.disabled = true; btn.setAttribute('aria-busy','true');
     hint.textContent = "İndiriliyor...";
 
     try{
@@ -540,28 +540,20 @@ async function makeOldListDoc(){
       if(!resp.ok) throw new Error("HTTP " + resp.status);
       const text = await resp.text();
 
-      // Basic CSV header validation (first line only; we do not attempt to parse the whole CSV here).
       const firstLine = text.split(/\r?\n/)[0] || "";
-      // Split headers with a small CSV-safe approach: respect quotes.
       const headers = [];
       let cur = "", inQ = false;
       for (let i=0;i<firstLine.length;i++){
         const ch = firstLine[i];
         if (ch === '"'){
-          // lookahead for escaped quote
           if (inQ && firstLine[i+1] === '"'){ cur += '"'; i++; }
           else inQ = !inQ;
-        } else if (ch === ',' && !inQ) {
-          headers.push(cur); cur = "";
-        } else {
-          cur += ch;
-        }
+        } else if (ch === ',' && !inQ) { headers.push(cur); cur = ""; }
+        else { cur += ch; }
       }
       headers.push(cur);
 
-      const norm = headers.map(h => normalizeHeader(h));
-
-      // Check must-have groups exist (one of each group)
+      const norm = headers.map(normalizeHeader);
       const hasBarkod = norm.some(h => ['barkod','ean','ean13','barkod no','barkod numarasi','barkod numarası'].includes(h));
       const hasAd     = norm.some(h => ['stok adi','urun adi','ürün adı','ad'].includes(h));
       const hasFiyat  = norm.some(h => ['magaza','mağaza','satis fiyati 1','satış fiyatı 1','fiyat'].includes(h));
@@ -572,18 +564,13 @@ async function makeOldListDoc(){
         throw new Error("Required headers missing.");
       }
 
-      // Create a Blob/File and programmatically set to input, then dispatch change
-      const enc = new TextEncoder();
-      const bom = new Uint8Array([0xEF,0xBB,0xBF]); // BOM for Excel safety
+      const bom = new Uint8Array([0xEF,0xBB,0xBF]);
       const blob = new Blob([bom, text], {type: "text/csv"});
       const file = new File([blob], "guncel.csv", {type: "text/csv", lastModified: Date.now()});
 
-      // DataTransfer for setting input.files
       const dt = new DataTransfer();
       dt.items.add(file);
       fileInput.files = dt.files;
-
-      // Trigger the app's existing import handler
       fileInput.dispatchEvent(new Event('change', {bubbles: true}));
 
       hint.textContent = "Tamam: CSV içeri alındı.";
@@ -592,18 +579,24 @@ async function makeOldListDoc(){
       hint.textContent = "İndirme/işleme hatası. Ağ veya başlıkları kontrol edin.";
       alert("Güncel liste alınamadı: " + err.message);
     }finally{
-      btn.disabled = false;
-      btn.removeAttribute('aria-busy');
-      setTimeout(() => { if (hint.textContent.startsWith("Tamam")) hint.textContent=""; }, 4000);
+      const btn = document.getElementById('btnFetchSheet');
+      if(btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); }
+      setTimeout(() => { const h=document.getElementById('btnFetchSheetHint'); if(h && h.textContent.startsWith("Tamam")) h.textContent=""; }, 4000);
     }
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('btnFetchSheet');
-    if(btn) btn.addEventListener('click', fetchCSV);
-  });
+  function wire(){
+    const b1 = document.getElementById('btnFetchSheet');
+    if(b1) b1.addEventListener('click', fetchCSV);
+
+    const b2 = document.getElementById('btnOpenCam');
+    if(b2) b2.addEventListener('click', () => {
+      try{ if(typeof startCamera === 'function') startCamera(); }catch(e){ console.error(e); alert("Kamera açılamadı: "+e.message); }
+    });
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
 })();
 </script>
-
-</body>
-</html>
+>
