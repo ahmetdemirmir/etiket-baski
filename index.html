@@ -588,7 +588,20 @@ async function fetchCloudCSVOnly(){
     if(text.charCodeAt(0)===0xFEFF) text = text.slice(1);
     text = text.replace(/\r\n/g,'\n');
 
-    const rows = csv_parseCSV(text);
+    const rows = (function(str){
+      const semi=(str.match(/;/g)||[]).length, comma=(str.match(/,/g)||[]).length;
+      const delim = semi>comma ? ';' : ',';
+      const out=[]; let row=[]; let i=0; let inQ=false; let f='';
+      while(i<str.length){ const ch=str[i];
+        if(ch==='"'){
+          if(inQ && str[i+1]==='"'){ f+='"'; i+=2; continue; }
+          inQ=!inQ; i++; continue;
+        }
+        if(!inQ && (ch==='\n' || ch==='\r')){ row.push(f); f=''; if(row.length>1||row[0]!=='') out.push(row); row=[]; if(ch==='\r'&&str[i+1]==='\n') i+=2; else i++; continue; }
+        if(!inQ && ch===delim){ row.push(f); f=''; i++; continue; }
+        f+=ch; i++;
+      }
+      row.push(f); if(row.length>1||row[0]!=='') out.push(row); return out; })(text);
     if(!rows || rows.length<2){ alert("CSV boş/okunamadı."); return; }
 
     const header = rows[0];
