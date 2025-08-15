@@ -100,7 +100,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
         <button id="btnCart" class="btn neutral" style="font-size:16px"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
         <button id="btnPrint" class="btn success" style="font-size:16px"><i class="fa-solid fa-print"></i> Yazdır</button>
         <button id="btnPriceView" class="btn warning" style="font-size:16px"><i class="fa-solid fa-tag"></i> Fiyat Gör</button>
-        <button id="btnCamV3" class="btn primary" style="font-size:16px"><i class="fa-solid fa-camera"></i> Kamera</button>
+        <button id="btnCamV3" class="btn primary" style="font-size:16px"><i class="fa-solid fa-camera"></i> Kamera Aç</button>
 
       </div>
     </div>
@@ -168,7 +168,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     <div class="actions" style="justify-content:flex-end">
       <button id="btnPdfCancel" class="btn">İptal</button>
       <button id="btnPdfSave" class="btn success">Kaydet ve Devam Et</button>
-      <button id="btnPdfShare" class="btn neutral" style="display:none">Paylaş</button>
     </div>
   </div>
 </div>
@@ -514,94 +513,11 @@ if(window.__DEV_TEST__) runTests();
 })(); // IIFE yalnız sonda
 </script>
 
-<script src="camera-v3.js"></script>
-
-<script>
-(function(){
-  // Mobile detection (simple): not a precise science but good enough
-  var IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  var shareBtn;
-
-  function fmtDateISO(){
-    try { return new Date().toISOString().slice(0,10); } catch(e){ return 'today'; }
-  }
-
-  async function shareBlob(blob, filename){
-    try{
-      var file = new File([blob], filename, {type: 'application/pdf'});
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Etiketler PDF', text: 'Etiketler PDF' });
-        return true;
-      }
-      // Fallback: try share without files (less ideal)
-      if (navigator.share){
-        await navigator.share({ title: 'Etiketler PDF', text: 'Etiketler PDF hazır.' });
-        return true;
-      }
-    }catch(err){
-      // user cancelled or share failed
-      return false;
-    }
-    return false;
-  }
-
-  // Hook into existing flow: when __docLabels is generated and iframe set, we also keep a reference to the blob
-  var _origBtnPrint = document.getElementById('btnPrint');
-  var _origClick = _origBtnPrint && _origBtnPrint.onclick;
-
-  // We don't override existing handler; instead we patch at the end of the existing click handler by observing src change
-  var pdfFrame = document.getElementById('pdfFrame');
-  var lastUrl = '';
-  var shareBlobCache = null;
-
-  // Monkey-patch the function that sets the PDF blob URL: we cannot easily patch original code,
-  // so we observe URL changes and fetch the blob back from __docLabels when available.
-  var _setSrc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'src').set;
-  Object.defineProperty(HTMLIFrameElement.prototype, 'src', {
-    set: function(v){
-      _setSrc.call(this, v);
-      if (this.id === 'pdfFrame') {
-        // We expect window.__docLabels to be set by the app script
-        try {
-          var d = window.__docLabels;
-          if (d && typeof d.output === 'function') {
-            shareBlobCache = d.output('blob');
-          } else {
-            shareBlobCache = null;
-          }
-        } catch(e){ shareBlobCache = null; }
-        // Show Share button on mobile
-        try{
-          shareBtn = document.getElementById('btnPdfShare');
-          if (shareBtn) {
-            shareBtn.style.display = IS_MOBILE ? '' : 'none';
-            shareBtn.onclick = async function(){
-              if (!shareBlobCache) return;
-              var ok = await shareBlob(shareBlobCache, 'etiketler_'+fmtDateISO()+'.pdf');
-              if(!ok){
-                alert('Paylaşım desteklenmiyor veya iptal edildi.');
-              }
-            };
-          }
-        }catch(e){}
-        // Auto-open share sheet on mobile as soon as preview shows
-        if (IS_MOBILE && shareBlobCache) {
-          setTimeout(async function(){
-            await shareBlob(shareBlobCache, 'etiketler_'+fmtDateISO()+'.pdf');
-          }, 350);
-        }
-      }
-    }
-  });
-})();
-</script>
-
-
 <script id="price-view-mode">
 (function(){
-  var priceTimer=null;
+  var timer=null;
   function clearPV(){
-    if(priceTimer){ try{ clearInterval(priceTimer); }catch(e){} priceTimer=null; }
+    if(timer){ try{ clearInterval(timer); }catch(e){} timer=null; }
     var pv=document.getElementById('pvWrap'); if(pv&&pv.parentNode) pv.parentNode.removeChild(pv);
   }
   window.openPriceView = function(p){
@@ -616,16 +532,12 @@ if(window.__DEV_TEST__) runTests();
       var old = isOld(p);
       document.getElementById('mOld').style.display = old? 'block':'none';
 
-      // hide qty buttons & custom
       mdl.querySelectorAll('[data-qty], #btnCustom').forEach(function(el){ el.style.display='none'; });
-      // ensure cancel button visible
       var cancelBtn = document.getElementById('btnCancel'); if(cancelBtn){ cancelBtn.style.display=''; }
 
-      // add countdown progress (6s)
       clearPV();
       var box = mdl.querySelector('.box');
-      var wrap = document.createElement('div'); wrap.id='pvWrap';
-      wrap.style.cssText='margin-top:8px';
+      var wrap = document.createElement('div'); wrap.id='pvWrap'; wrap.style.marginTop='8px';
       wrap.innerHTML = '<div style="font-size:12px;opacity:.8">Bu pencere <b><span id="pvSec">6</span>s</b> sonra kapanacak</div>\
       <div style="position:relative;height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:6px">\
         <div id="pvBar" style="position:absolute;left:0;top:0;height:100%;width:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));transition:width .1s"></div>\
@@ -634,7 +546,7 @@ if(window.__DEV_TEST__) runTests();
 
       var left=6000, step=100;
       var bar=document.getElementById('pvBar'), sec=document.getElementById('pvSec');
-      priceTimer=setInterval(function(){
+      timer=setInterval(function(){
         left -= step; if(left<0) left=0;
         var pct = Math.round(left/6000*100);
         if(bar) bar.style.width = pct + '%';
@@ -662,29 +574,236 @@ if(window.__DEV_TEST__) runTests();
     }catch(e){ console.warn('openPriceView error', e); }
   };
 
-  function bind(){
-    var cam = document.getElementById('btnCamV3');
-    var pv  = document.getElementById('btnPriceView');
-    if (cam && !cam.__boundCam){
-      cam.addEventListener('click', function(){
-        try{ window.__priceViewMode=false; }catch(e){}
-        try{ openModal(); } catch(e){ console.warn('openModal error', e); }
-      });
-      cam.__boundCam = true;
-    }
-    if (pv && !pv.__boundPV){
+  function bindPV(){
+    var pv=document.getElementById('btnPriceView');
+    if(pv && !pv.__bound){
+      pv.__bound=true;
       pv.addEventListener('click', function(){
         try{ window.__priceViewMode=true; }catch(e){}
-        try{ openModal(); } catch(e){ console.warn('openModal error', e); }
+        var cam=document.getElementById('btnCamV3');
+        if(cam){ cam.click(); } else { console.warn('btnCamV3 yok'); }
       });
-      pv.__boundPV = true;
     }
   }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', bind);
-  else bind();
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bindPV);
+  else bindPV();
 })();
 </script>
 
 </body>
 </html
-</html>
+<!-- ===== Mobil Kamera (Native-first) — INLINE ===== -->
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function create(tag, props, styles){
+    var el = document.createElement(tag);
+    if (props) Object.keys(props).forEach(function(k){ el[k]=props[k]; });
+    if (styles) Object.keys(styles).forEach(function(k){ el.style[k]=styles[k]; });
+    return el;
+  }
+  function validEAN13(code){
+    if(!/^\d{13}$/.test(code)) return false;
+    var s=code.split('').map(Number), sum=0;
+    for(var i=0;i<12;i++) sum+=s[i]*(i%2?3:1);
+    return ((10-(sum%10))%10)===s[12];
+  }
+  function beepFx(ok){
+    try{
+      if(typeof window.beep==='function') window.beep(ok);
+      else if(navigator.vibrate) navigator.vibrate(ok?[40]:[20,30,20]);
+    }catch(_e){}
+  }
+
+  function ensureUI(){
+    if(!document.getElementById('btnCamV3')){
+      var btn=create('button',{id:'btnCamV3',className:'btn primary'});
+      btn.style.marginLeft='8px';
+      var ico=create('i',{className:'fa-solid fa-camera'});
+      btn.appendChild(ico); btn.appendChild(document.createTextNode(' Kamera (Yeni)'));
+      var bars=document.querySelectorAll('.control');
+      if(bars.length) bars[0].appendChild(btn); else document.body.appendChild(btn);
+    }
+    if(!document.getElementById('mdlCamV3')){
+      var overlay=create('div',{id:'mdlCamV3'},{position:'fixed',left:'0',top:'0',right:'0',bottom:'0',background:'rgba(0,0,0,.55)',display:'none',zIndex:'9998'});
+      var box=create('div',{className:'box'},{width:'min(96vw,720px)',maxHeight:'92vh',overflow:'auto',padding:'10px',background:'#fff',borderRadius:'12px',margin:'4vh auto'});
+      var h=create('h3',null,{margin:'6px 10px 10px'}); h.textContent='Barkod Tara (Yeni Motor)'; box.appendChild(h);
+      var bar=create('div',null,{display:'flex',gap:'8px',alignItems:'center',margin:'0 10px 8px',flexWrap:'wrap'});
+      var sel=create('select',{id:'camSelectV3',className:'input'},{minWidth:'220px',flex:'1'});
+      var tw=create('label',null,{display:'flex',alignItems:'center',gap:'6px'});
+      var torch=create('input',{id:'chkTorchV3',type:'checkbox'});
+      tw.appendChild(torch); tw.appendChild(document.createTextNode('Flaş'));
+      var zw=create('div',null,{display:'flex',alignItems:'center',gap:'6px'});
+      zw.appendChild(document.createTextNode('Zoom'));
+      var rng=create('input',{id:'rngZoomV3',type:'range'},{width:'140px'}); rng.min='1'; rng.max='1'; rng.step='0.1'; rng.value='1';
+      var p=create('button',{id:'btnCamPauseV3',className:'btn neutral'}); p.textContent='Durdur';
+      var c=create('button',{id:'btnCamCloseV3',className:'btn danger'}); c.textContent='Kapat';
+      bar.appendChild(sel); bar.appendChild(tw); bar.appendChild(zw); zw.appendChild(rng); bar.appendChild(p); bar.appendChild(c); box.appendChild(bar);
+      var area=create('div',null,{padding:'0 10px 10px'});
+      var v=create('video',{id:'camVideoV3',playsInline:true,autoplay:true,muted:true},{width:'100%',border:'1px solid #d6dbe6',borderRadius:'12px',background:'#000'});
+      var canvas=create('canvas',{id:'camCanvasV3'},{display:'none'});
+      area.appendChild(v); area.appendChild(canvas); box.appendChild(area);
+      var hint=create('small',{className:'hint'},{display:'block',margin:'0 12px 4px',color:'#64748b'});
+      hint.textContent='İpucu: Ürüne 15–25 cm yaklaşın. Odak zayıfsa zoom’u artırın veya flaşı açın.'; box.appendChild(hint);
+      overlay.appendChild(box);
+      overlay.addEventListener('click', function(ev){ if(ev.target && ev.target.id==='mdlCamV3'){ stopAll(); } });
+      document.body.appendChild(overlay);
+    }
+  }
+  function show(){ document.getElementById('mdlCamV3').style.display='block'; }
+  function hide(){ document.getElementById('mdlCamV3').style.display='none'; }
+
+  var stream=null, track=null, detector=null, running=false, paused=false, failCount=0, lastCode='', lastTs=0, foundLock=false;
+
+  function supported(){ try{ return ('BarcodeDetector' in window); }catch(_e){ return false; } }
+  async function listCameras(){ var devs=await navigator.mediaDevices.enumerateDevices(); return devs.filter(function(d){return d.kind==='videoinput';}); }
+
+  async function start(deviceId){
+    if(stream) await stop();
+    var cs={ audio:false, video:{ deviceId: deviceId? {exact:deviceId}:undefined, facingMode: deviceId? undefined : {ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} } };
+    stream=await navigator.mediaDevices.getUserMedia(cs);
+    var v=document.getElementById('camVideoV3'); v.srcObject=stream;
+    track=stream.getVideoTracks()[0];
+    var caps=track.getCapabilities?track.getCapabilities():{};
+    var sets=track.getSettings?track.getSettings():{};
+    try{ await track.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); }catch(_e){}
+    var rng=document.getElementById('rngZoomV3');
+    if(caps.zoom){ rng.min=caps.zoom.min||1; rng.max=caps.zoom.max||1; rng.step=caps.zoom.step||0.1; rng.value=sets.zoom||rng.min; rng.disabled=false; } else { rng.min='1'; rng.max='1'; rng.value='1'; rng.disabled=true; }
+    document.getElementById('chkTorchV3').disabled = !caps.torch;
+    paused=false; running=true; document.getElementById('btnCamPauseV3').textContent='Durdur';
+    detector=null;
+    if(supported()){
+      try{
+        var fmts=(BarcodeDetector.getSupportedFormats && await BarcodeDetector.getSupportedFormats()) || [];
+        if(fmts && fmts.indexOf('ean_13')>-1){ detector=new BarcodeDetector({formats:['ean_13','ean_8','code_128']}); }
+        else { detector=new BarcodeDetector(); }
+      }catch(_e){ detector=null; }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  async function stop(){
+    running=false;
+    try{ if(track) track.stop(); }catch(_e){}
+    try{ if(stream) stream.getTracks().forEach(function(t){ try{t.stop();}catch(_e){} }); }catch(_e){}
+    stream=null; track=null; detector=null;
+  }
+  async function stopAll(){ await stop(); hide(); }
+
+  async function loop(){
+    if(!running || paused){ return; }
+    var v=document.getElementById('camVideoV3'); if(v.readyState<2){ requestAnimationFrame(loop); return; }
+    if(detector){
+      try{
+        var arr=await detector.detect(v);
+        if(arr && arr.length){ onCode(arr[0].rawValue||''); failCount=0; }
+        else onFail();
+      }catch(_e){ onFail(); }
+      requestAnimationFrame(loop); return;
+    }
+    onFail(); requestAnimationFrame(loop);
+  }
+
+  function onFail(){
+    failCount++;
+    if(track && track.getCapabilities){
+      var caps=track.getCapabilities();
+      if(caps.zoom && failCount % 40 === 0){
+        var s=track.getSettings(); var step=caps.zoom.step||0.25;
+        var next=Math.min((s.zoom||1)+step, caps.zoom.max||s.zoom||1);
+        track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
+        document.getElementById('rngZoomV3').value = String(next);
+      }
+    }
+  }
+
+  function onCode(text){
+    if(foundLock) return;
+    var now=Date.now();
+    var code=String(text||'').replace(/\D/g,'');
+    if(!code) return;
+    if(code===lastCode && (now-lastTs)<1200) return;
+    lastCode=code; lastTs=now;
+    if(/^\d{13}$/.test(code) && !validEAN13(code)){ beepFx(false); return; }
+
+    var match=null;
+    try{
+      if(window.PRODUCTS && Array.isArray(PRODUCTS)){
+        var norm=function(x){ return String(x||'').replace(/\D/g,''); };
+        match = PRODUCTS.find(function(p){ return norm(p.barcode)===code; });
+        if(!match){
+          var last6=code.slice(-6);
+          var cands = PRODUCTS.filter(function(p){ var b=norm(p.barcode); return b && b.slice(-6)===last6; });
+          if(cands.length===1) match=cands[0];
+        }
+      }
+    }catch(_e){}
+
+    if(match){
+      foundLock = true;
+      try{ beepFx(true); }catch(_e){}
+      try{ hide(); }catch(_e){}
+      try{ stop(); }catch(_e){}
+      setTimeout(function(){
+        try{ var ms=document.getElementById('mdlSearch'); if(ms) ms.classList.remove('shown'); }catch(_e){}
+        try{ if(typeof openProduct==='function') openProduct(match); }catch(_e){}
+      }, 50);
+      return;
+    }
+
+    var inp=document.getElementById('inpBarcode');
+    if(inp){ inp.value=code.slice(-6); try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(_e){} }
+    beepFx(true);
+  }
+
+  function bind(){
+    var rng=document.getElementById('rngZoomV3');
+    rng.addEventListener('input', function(){
+      if(!track || !track.applyConstraints) return;
+      var z=parseFloat(rng.value||'1');
+      track.applyConstraints({ advanced:[{ zoom:z }] }).catch(function(){});
+    });
+    document.getElementById('chkTorchV3').addEventListener('change', function(){
+      if(!track || !track.applyConstraints) return;
+      var on=document.getElementById('chkTorchV3').checked;
+      track.applyConstraints({ advanced:[{ torch: !!on }] }).catch(function(){ document.getElementById('chkTorchV3').checked=false; });
+    });
+    document.getElementById('camVideoV3').addEventListener('click', function(){
+      if(!track || !track.getCapabilities) return;
+      var caps=track.getCapabilities(); if(!caps.zoom) return;
+      var cur=parseFloat((document.getElementById('rngZoomV3').value)||'1');
+      var next=Math.min(cur+(caps.zoom.step||0.25), caps.zoom.max||cur);
+      document.getElementById('rngZoomV3').value=String(next);
+      track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
+    });
+  }
+
+  async function openModal(){
+    foundLock = false;
+    show();
+    try{
+      var cams = await listCameras();
+      var sel=document.getElementById('camSelectV3'); sel.innerHTML='';
+      cams.forEach(function(d,i){ var o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||('Kamera '+(i+1)); sel.appendChild(o); });
+      var back=cams.find(function(d){ return /back|arka|environment|rear/i.test(d.label||''); });
+      sel.value = back ? back.deviceId : (cams[0]? cams[0].deviceId : '');
+      await start(sel.value);
+      sel.onchange = async function(){ await start(sel.value); };
+    }catch(e){
+      alert('Kamera listesi alınamadı. Tarayıcı izni gerekebilir.');
+    }
+  }
+
+  function wire(){
+    var b=document.getElementById('btnCamV3'); if(b && !b.__wired){ b.__wired=true; b.addEventListener('click', function(){ openModal(); }); }
+    var bc=document.getElementById('btnCamCloseV3'); if(bc && !bc.__wired){ bc.__wired=true; bc.addEventListener('click', function(){ stopAll(); }); }
+    var bp=document.getElementById('btnCamPauseV3'); if(bp && !bp.__wired){ bp.__wired=true; bp.addEventListener('click', function(e){ if(!running) return; if(!paused){ paused=true; e.target.textContent='Devam Et'; } else { paused=false; e.target.textContent='Durdur'; requestAnimationFrame(loop); } }); }
+    window.addEventListener('pagehide', stopAll);
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){ ensureUI(); bind(); wire(); });
+  var mo=new MutationObserver(wire); mo.observe(document.body,{childList:true,subtree:true});
+})();
+</script>
+>

@@ -113,20 +113,9 @@
     var obs = new MutationObserver(function(){
       var vis = isShown(el);
       if(!vis && resumeAfter){
-        setTimeout(function(){
-          try {
-            var nodes = document.querySelectorAll('.modal,[role="dialog"]');
-            var anyOpen = false;
-            for (var i=0;i<nodes.length;i++){ if(isShown(nodes[i])){ anyOpen = true; break; } }
-            if(anyOpen) return;
-            if(document.querySelectorAll('.modal,[role="dialog"]').length>0){
-            var anyShown=false;document.querySelectorAll('.modal,[role="dialog"]').forEach(function(m){if(isShown(m)) anyShown=true;});
-            if(anyShown) return;}
-            resumeAfter = false;
-            foundLock = false;
-            setTimeout(function(){ try{ openModal(); }catch(_e){} }, 120);
-          } catch(_e){}
-        }, 60);
+        resumeAfter = false;
+        foundLock = false;
+        setTimeout(function(){ try{ openModal(); }catch(_e){} }, 120);
       }
     });
     obs.observe(el, { attributes:true, attributeFilter:['class','style','hidden'] });
@@ -174,7 +163,7 @@
 
     if(match){
       foundLock = true;
-      resumeAfter = true; try{ensureGlobalModalWatcher();}catch(_e){}
+      resumeAfter = true;
       try{ beepFx(true); }catch(_e){}
       try{ hide(); }catch(_e){}
       try{ stop(); }catch(_e){}
@@ -215,77 +204,7 @@
     });
   }
 
-  async 
-// === Global Modal Resume Guard (robust) ===
-(function(){
-  var _globalModalObserver = null;
-  var _debounce = null;
-
-  function isNodeVisible(node){
-    try{
-      if(!node || node.nodeType !== 1) return false;
-      if(node.hasAttribute('hidden')) return false;
-      var cs = window.getComputedStyle(node);
-      if(!cs) return false;
-      if(cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) return false;
-      // If detached or zero-sized, treat cautiously; modals often animate from opacity
-      return true;
-    }catch(_e){ return false; }
-  }
-
-  function visibleModalCount(){
-    try{
-      var nodes = document.querySelectorAll('.modal, [role="dialog"], .popup, .swal2-container, .swal2-shown');
-      var c = 0;
-      for (var i=0;i<nodes.length;i++){
-        if(isNodeVisible(nodes[i])) c++;
-      }
-      // Some apps toggle a backdrop; ignore backdrops explicitly
-      var backs = document.querySelectorAll('.modal-backdrop,.backdrop');
-      for (var j=0;j<backs.length;j++){
-        if(isNodeVisible(backs[j])) {
-          // backdrops shouldn't count as open modals; no-op
-        }
-      }
-      return c;
-    }catch(_e){ return 0; }
-  }
-
-  function tryResumeIfAllClosed(){
-    if(!window.resumeAfter) return;
-    // allow the second popup to appear/animate
-    clearTimeout(_debounce);
-    _debounce = setTimeout(function(){
-      if(!window.resumeAfter) return;
-      var openCount = visibleModalCount();
-      if(openCount === 0){
-        window.resumeAfter = false;
-        window.foundLock = false;
-        setTimeout(function(){ try{ openModal(); }catch(_e){} }, 120);
-      }
-    }, 160);
-  }
-
-  window.ensureGlobalModalWatcher = function(){
-    if(_globalModalObserver) return;
-    try{
-      _globalModalObserver = new MutationObserver(function(){
-        if(window.resumeAfter) tryResumeIfAllClosed();
-      });
-      _globalModalObserver.observe(document.body, {subtree:true, attributes:true, attributeFilter:['class','style','hidden']});
-      // Also listen for DOM adds/removes
-      var _mo2 = new MutationObserver(function(){ if(window.resumeAfter) tryResumeIfAllClosed(); });
-      _mo2.observe(document.body, {subtree:true, childList:true});
-      // On window focus changes (Android activity resumes), re-check
-      window.addEventListener('focus', function(){ if(window.resumeAfter) tryResumeIfAllClosed(); }, true);
-    }catch(_e){}
-  };
-
-  // Initialize on load
-  try{ ensureGlobalModalWatcher(); }catch(_e){}
-  // When product found sets resumeAfter=true, they should call ensureGlobalModalWatcher again; patch below if needed.
-})();
-function openModal(){
+  async function openModal(){
     foundLock = false;
     show();
     try{
