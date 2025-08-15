@@ -504,7 +504,7 @@ async function makeOldListDoc(){
 // --- ULTRA-SIMPLE CSV-ONLY CLOUD FETCH (V7) ---
 const CLOUD_URL = "https://script.google.com/macros/s/AKfycbymC0KeZ-EHPnL4et5bmFLazdvd2ZU-FgWxXcg7sfIU-MHwV1_gvgp5muzwFlwZTDhy/exec";
 
-function parseCSV(str){
+function csv_csv_parseCSV(str){
   // Delimiter detection
   const semi = (str.match(/;/g)||[]).length, comma = (str.match(/,/g)||[]).length;
   const delim = semi>comma ? ';' : ',';
@@ -528,7 +528,7 @@ function parseCSV(str){
   return out;
 }
 
-function normKey(k){
+function csv_csv_normKey(k){
   if(!k) return '';
   let s = String(k).toLowerCase();
   const map = {'ğ':'g','ü':'u','ş':'s','ı':'i','i':'i','ö':'o','ç':'c'};
@@ -537,17 +537,17 @@ function normKey(k){
   s = s.replace(/[^a-z0-9 ]+/g,' ');
   return s;
 }
-function pick(dict, candidates){
+function csv_pick(dict, candidates){
   const keys = Object.keys(dict);
   for(const c of candidates){
-    const ck = normKey(c);
+    const ck = csv_normKey(c);
     for(const k of keys){
-      if(normKey(k)===ck || normKey(k).includes(ck)) return dict[k];
+      if(csv_normKey(k)===ck || csv_normKey(k).includes(ck)) return dict[k];
     }
   }
   return null;
 }
-function toBarcode(v){
+function csv_csv_toBarcode(v){
   if(v==null) return '';
   let s=String(v).trim().replace(',', '.'); // scientific comma to dot
   if(/e\+\d+$/i.test(s)){
@@ -562,7 +562,7 @@ function toBarcode(v){
   }
   return s.replace(/\D/g,'');
 }
-function toPrice(v){
+function csv_csv_toPrice(v){
   if(v==null || v==='') return null;
   let s=String(v).toLowerCase().replace(/tl|try|₺|\s/g,'');
   if(s.includes('.') && s.includes(',')) s=s.replace(/\./g,'').replace(',', '.');
@@ -570,7 +570,7 @@ function toPrice(v){
   s = s.replace(/(\d)\.(?=\d{3}(\D|$))/g,'$1');
   const n = parseFloat(s); return isNaN(n)?null:n;
 }
-function toDateYMD(v){
+function csv_csv_toDateYMD(v){
   if(!v && v!==0) return null;
   if(v instanceof Date) return v.toISOString().slice(0,10);
   const s=String(v).trim();
@@ -588,7 +588,7 @@ async function fetchCloudCSVOnly(){
     if(text.charCodeAt(0)===0xFEFF) text = text.slice(1);
     text = text.replace(/\r\n/g,'\n');
 
-    const rows = parseCSV(text);
+    const rows = csv_parseCSV(text);
     if(!rows || rows.length<2){ alert("CSV boş/okunamadı."); return; }
 
     const header = rows[0];
@@ -599,10 +599,10 @@ async function fetchCloudCSVOnly(){
     // Field picks tuned to your headers
     const products = [];
     for(const o of items){
-      const barcode = toBarcode(pick(o, ['Barkodu','Barkod','Barkod No','EAN','EAN13']));
+      const barcode = csv_toBarcode(pick(o, ['Barkodu','Barkod','Barkod No','EAN','EAN13']));
       const name    = String(pick(o, ['Stok Adı','Ürün Adı','Ad','Açıklama'])||'').trim();
-      const price   = toPrice(pick(o, ['MAĞAZA','Mağaza','Satış Fiyatı 1','Satış Fiyatı 1 (KDV Dahil)','Fiyat']));
-      const pdate   = toDateYMD(pick(o, ['Satış Fiyatı 1 Değ. Tar.','Fiyat Değişiklik Tarihi','FD','Değişiklik Tarihi']));
+      const price   = csv_toPrice(pick(o, ['MAĞAZA','Mağaza','Satış Fiyatı 1','Satış Fiyatı 1 (KDV Dahil)','Fiyat']));
+      const pdate   = csv_toDateYMD(pick(o, ['Satış Fiyatı 1 Değ. Tar.','Fiyat Değişiklik Tarihi','FD','Değişiklik Tarihi']));
       if(barcode && name){
         products.push({ barcode, name, price, priceDate: pdate });
       }
