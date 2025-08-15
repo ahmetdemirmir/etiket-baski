@@ -340,29 +340,36 @@ function rowsToProducts(rows){
 }
 
 
+
 async function fetchCloud(){
   const btn = document.getElementById('btnCloud');
   try{
     if(btn) btn.disabled=true;
-    const res = await fetch(CLOUD_URL + "?t=" + Date.now(), {cache:"no-store"});
-    if(!res.ok) throw new Error("HTTP " + res.status);
+    const res = await fetch(CLOUD_URL + "?t=" + Date.now(), {cache:"no-store", redirect:"follow"});
     const ct = (res.headers.get("content-type")||"").toLowerCase();
+    const status = res.status;
     let products = [];
-    if(ct.includes("application/json")){
-      const j = await res.json();
-      const rows = Array.isArray(j) ? j : (j.rows || j.data || j.values || j.items || j.sheet || j.records || j.result || j.payload || []);
-      products = rowsToProducts(rows);
-      if(products.length===0 && j && typeof j==='object'){
-        const vals = j.values || j.items || j.records || j.rows;
-        if(Array.isArray(vals)) products = rowsToProducts(vals);
-      }
-    }else{
-      // TEXT branch (CSV/HTML/JSON-string)
-      const text = await res.text();
-      console.log("Bulut ham cevap (ilk 200):", text.slice(0,200));
-      let parsed = false;
+    let text = "";
 
-      // 1) Try JSON from text
+    if(ct.includes("application/json")){
+      try{
+        const j = await res.json();
+        const rows = Array.isArray(j) ? j : (j.rows || j.data || j.values || j.items || j.sheet || j.records || j.result || j.payload || []);
+        products = rowsToProducts(rows);
+        if(products.length===0 && j && typeof j==='object'){
+          const vals = j.values || j.items || j.records || j.rows;
+          if(Array.isArray(vals)) products = rowsToProducts(vals);
+        }
+      }catch(e){
+        // fall back to text for debug
+        try{ text = JSON.stringify(await res.clone().text()).slice(0,300);}catch(_){}
+      }
+    } else {
+      try{ text = await res.text(); }catch(_){ text="(body okunamadı)"; }
+      console.log("Bulut ham cevap (ilk 300):", text.slice(0,300));
+      let parsed=false;
+
+      // JSON as text
       try{
         const j = JSON.parse(text);
         const rows = Array.isArray(j) ? j : (j.rows || j.data || j.values || j.items || j.sheet || j.records || j.result || j.payload || []);
@@ -370,7 +377,7 @@ async function fetchCloud(){
         if(products.length>0) parsed=true;
       }catch(_){}
 
-      // 2) If contains <table>, parse HTML table
+      // HTML table
       if(!parsed && /<table[\s\S]*<\/table>/i.test(text)){
         try{
           const parser = new DOMParser();
@@ -391,7 +398,7 @@ async function fetchCloud(){
         }catch(_){}
       }
 
-      // 3) Try CSV/TSV with XLSX; also support semicolon-separated
+      // CSV/TSV
       if(!parsed){
         try{
           let csv = text;
@@ -402,15 +409,32 @@ async function fetchCloud(){
           const sheet = wb.Sheets[wb.SheetNames[0]];
           const rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
           products = rowsObj.map(normalizeRow).filter(x=>x.barcode&&x.name);
-          if(products.length>0) parsed=true;
+          parsed = products.length>0;
         }catch(_){}
       }
     }
 
+    // Permission/login detection (Google sign-in / access denied)
+    const looksLikeLogin = /accounts\.google\.com|<title>.*Sign in.*<\/title>|<title>.*Oturum aç.*<\/title>|authorize|Access Denied|Yetkisiz/i.test(text||"");
+
     if(!Array.isArray(products) || products.length===0){
-      alert("Buluttan uygun veri alınamadı. Apps Script çıktısını kontrol edin.");
+      let msg = "Buluttan uygun veri alınamadı.\n";
+      msg += "- HTTP Durumu: " + status + "\n";
+      msg += "- İçerik Türü: " + (ct || "(bilinmiyor)") + "\n";
+      const preview = (text||"").slice(0,300).replace(/\n/g,' ');
+      if(preview) msg += "- Örnek Gövde (ilk 300): " + preview + "\n";
+      if(looksLikeLogin){
+        msg += "\nGörünüyor ki Google, giriş/izin sayfası döndürüyor. Apps Script dağıtımını şu şekilde ayarlayın:\n";
+        msg += "• Deploy > Manage deployments > Web app\n";
+        msg += "• Execute as: Me (kendiniz)\n";
+        msg += "• Who has access: Anyone\n";
+        msg += "• CORS için JSON çıkış: ContentService + setHeader('Access-Control-Allow-Origin','*')\n";
+      }
+      // Show modal-like prompt
+      alert(msg);
       return;
     }
+
     PRODUCTS = products;
     badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Bulut)`;
     showToast("Güncel veri çekildi");
@@ -421,6 +445,7 @@ async function fetchCloud(){
     if(btn) btn.disabled=false;
   }
 }
+
 
 
 document.addEventListener('DOMContentLoaded', () => {
