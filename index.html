@@ -7,102 +7,10 @@
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
-function openPriceView6s(p){
-    var mdl=document.getElementById('mdlProduct');
-    if(!mdl) return;
-    document.getElementById('mName').textContent=p.name||'';
-    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
-    document.getElementById('mBarcode').textContent=p.barcode||'';
-    var d=p.priceDate? new Date(p.priceDate):null;
-    document.getElementById('mDateRow').style.display=d?'block':'none';
-    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
-    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
-    // Adet butonlarını gizle
-    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
-    mdl.classList.add('shown');
-    var sec=6; var timer=setInterval(function(){
-        sec--; if(sec<=0){
-            clearInterval(timer);
-            mdl.classList.remove('shown');
-            setTimeout(function(){ window.openCamV3(true); }, 400);
-        }
-    },1000);
-}
-
-</script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js">
-function openPriceView6s(p){
-    var mdl=document.getElementById('mdlProduct');
-    if(!mdl) return;
-    document.getElementById('mName').textContent=p.name||'';
-    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
-    document.getElementById('mBarcode').textContent=p.barcode||'';
-    var d=p.priceDate? new Date(p.priceDate):null;
-    document.getElementById('mDateRow').style.display=d?'block':'none';
-    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
-    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
-    // Adet butonlarını gizle
-    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
-    mdl.classList.add('shown');
-    var sec=6; var timer=setInterval(function(){
-        sec--; if(sec<=0){
-            clearInterval(timer);
-            mdl.classList.remove('shown');
-            setTimeout(function(){ window.openCamV3(true); }, 400);
-        }
-    },1000);
-}
-
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
-function openPriceView6s(p){
-    var mdl=document.getElementById('mdlProduct');
-    if(!mdl) return;
-    document.getElementById('mName').textContent=p.name||'';
-    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
-    document.getElementById('mBarcode').textContent=p.barcode||'';
-    var d=p.priceDate? new Date(p.priceDate):null;
-    document.getElementById('mDateRow').style.display=d?'block':'none';
-    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
-    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
-    // Adet butonlarını gizle
-    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
-    mdl.classList.add('shown');
-    var sec=6; var timer=setInterval(function(){
-        sec--; if(sec<=0){
-            clearInterval(timer);
-            mdl.classList.remove('shown');
-            setTimeout(function(){ window.openCamV3(true); }, 400);
-        }
-    },1000);
-}
-
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
-function openPriceView6s(p){
-    var mdl=document.getElementById('mdlProduct');
-    if(!mdl) return;
-    document.getElementById('mName').textContent=p.name||'';
-    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
-    document.getElementById('mBarcode').textContent=p.barcode||'';
-    var d=p.priceDate? new Date(p.priceDate):null;
-    document.getElementById('mDateRow').style.display=d?'block':'none';
-    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
-    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
-    // Adet butonlarını gizle
-    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
-    mdl.classList.add('shown');
-    var sec=6; var timer=setInterval(function(){
-        sec--; if(sec<=0){
-            clearInterval(timer);
-            mdl.classList.remove('shown');
-            setTimeout(function(){ window.openCamV3(true); }, 400);
-        }
-    },1000);
-}
-
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
 :root{
@@ -204,6 +112,16 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; ürünü seçip sepete ekleyin.</small>
+  </div>
+</div>
+
+<!-- Arama sonuçları -->
+<div id="mdlSearch" class="modal">
+  <div class="box">
+    <h3>Filtrelenen Ürünler</h3>
+    <div class="mini">Filtre: <span id="mFilter"></span> — <span id="mCount">0</span> sonuç</div>
+    <div id="mList" class="list"></div>
+    <div class="actions" style="justify-content:flex-end"><button id="btnSearchClose" class="btn">Kapat</button></div>
   </div>
 </div>
 
@@ -322,7 +240,7 @@ $('fileExcel').addEventListener('change', (ev)=>{
 
 /* ===== SEARCH ===== */
 function isOld(p){ return p.priceDate ? monthsDiff(new Date(p.priceDate))>12 : false; }
-function showResults(title,arr){ LAST_RESULTS=arr; $('mFilter').textContent=title; $('mCount').textContent=arr.length; const L=$('mList'); L.innerHTML=''; arr.slice(0,200).forEach(p=>{ const li=document.createElement('div'); li.className='item'; li.innerHTML=`<div><div class="nm">${p.name}</div><div class="bc">${p.barcode}</div></div><div>${isOld(p)?'<span class="tag-old">Eski fiyat</span>':''}<span style="font-weight:900;margin-left:8px">${fmtTRY.format(p.price)}</span></div>`; li.onclick=()=>{ $('mdlSearch').classList.remove('shown'); openProduct(p); }; L.appendChild(li); }); $('mdlSearch').classList.add('shown'); }
+function showResults(title,arr){ if(arr && arr.length){ window.openProduct(arr[0]); } }</div><div class="bc">${p.barcode}</div></div><div>${isOld(p)?'<span class="tag-old">Eski fiyat</span>':''}<span style="font-weight:900;margin-left:8px">${fmtTRY.format(p.price)}</span></div>`; li.onclick=()=>{ $('mdlSearch').classList.remove('shown'); openProduct(p); }; L.appendChild(li); }); $('mdlSearch').classList.add('shown'); }
 function filterByName(q){ const s=q.trim().toLowerCase(); if(s.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=>p.name.toLowerCase().includes(s)); if(res.length) showResults(`Ad: "${q}"`,res); else $('mdlSearch').classList.remove('shown'); }
 function filterByLast6(v){ const t=v.replace(/\D/g,''); if(t.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=>p.barcode.endsWith(t)); if(res.length) showResults(`Barkod son: ${t}`,res); else $('mdlSearch').classList.remove('shown'); }
 inpName.addEventListener('input', ()=>{ filterByName(inpName.value); });
@@ -343,7 +261,11 @@ function openProduct(p){
     try {
         // Kamera otomatik tekrar açma
         if (typeof window.openCamV3 === 'function') {
-            setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
+            setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); 
+    try {
+        setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
+    } catch(e){}
+}, 400);
         }
     } catch(e){}
 };
@@ -361,6 +283,10 @@ function addToCart(p,qty,isOld){
         if (typeof window.openCamV3 === 'function') {
             setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
         }
+    } catch(e){}
+
+    try {
+        setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
     } catch(e){}
 refocusAfterAction(true);
 }
@@ -608,29 +534,6 @@ function runTests(){
 if(window.__DEV_TEST__) runTests();
 
 })(); // IIFE yalnız sonda
-
-function openPriceView6s(p){
-    var mdl=document.getElementById('mdlProduct');
-    if(!mdl) return;
-    document.getElementById('mName').textContent=p.name||'';
-    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
-    document.getElementById('mBarcode').textContent=p.barcode||'';
-    var d=p.priceDate? new Date(p.priceDate):null;
-    document.getElementById('mDateRow').style.display=d?'block':'none';
-    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
-    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
-    // Adet butonlarını gizle
-    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
-    mdl.classList.add('shown');
-    var sec=6; var timer=setInterval(function(){
-        sec--; if(sec<=0){
-            clearInterval(timer);
-            mdl.classList.remove('shown');
-            setTimeout(function(){ window.openCamV3(true); }, 400);
-        }
-    },1000);
-}
-
 </script>
 
 <script>
@@ -767,6 +670,10 @@ function openPriceView6s(p){
             setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
         }
     } catch(e){}
+
+    try {
+        setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
+    } catch(e){}
 refocusAfterAction(true); }catch(e){}
         }
       }, step);
@@ -784,6 +691,10 @@ refocusAfterAction(true); }catch(e){}
         if (typeof window.openCamV3 === 'function') {
             setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
         }
+    } catch(e){}
+
+    try {
+        setTimeout(function(){ window.openCamV3(window.__priceViewMode||false); }, 400);
     } catch(e){}
 refocusAfterAction(true); }catch(e){}
           if(_old) try{ _old(); }catch(e){}
@@ -1103,11 +1014,17 @@ refocusAfterAction(true); }catch(e){}
     var now=Date.now();
     if(code===lastCode && (now-lastHit)<900) return;
     lastCode=code; lastHit=now;
-    if(code.length===13 && !isValidEAN13(code)) return;
 
-    pauseDetection(true);
-    resetNoDetTimer();
-    try{ window.closeCam(); }catch(e){}
+    var p = findProduct(code);
+    if(p){
+        stopCamera();
+        if(window.__priceViewMode && typeof openPriceView6s==='function'){
+            openPriceView6s(p);
+        } else if(typeof window.openProduct==='function'){
+            window.openProduct(p);
+        }
+    }
+}catch(e){}
       resumeAfter=true; tryResume();
       // normalize products if not yet
       try{ if(Array.isArray(window.PRODUCTS) && !window.__productsNormalized) window.normalizeProductsInPlace(); }catch(e){}
@@ -1132,29 +1049,6 @@ refocusAfterAction(true); }catch(e){}
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bind); else bind();
 })();
-
-function openPriceView6s(p){
-    var mdl=document.getElementById('mdlProduct');
-    if(!mdl) return;
-    document.getElementById('mName').textContent=p.name||'';
-    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
-    document.getElementById('mBarcode').textContent=p.barcode||'';
-    var d=p.priceDate? new Date(p.priceDate):null;
-    document.getElementById('mDateRow').style.display=d?'block':'none';
-    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
-    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
-    // Adet butonlarını gizle
-    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
-    mdl.classList.add('shown');
-    var sec=6; var timer=setInterval(function(){
-        sec--; if(sec<=0){
-            clearInterval(timer);
-            mdl.classList.remove('shown');
-            setTimeout(function(){ window.openCamV3(true); }, 400);
-        }
-    },1000);
-}
-
 </script>
 
 </body>
@@ -1188,7 +1082,7 @@ function openPriceView6s(p){
       var btn=create('button',{id:'btnCamV3',className:'btn primary'});
       btn.style.marginLeft='8px';
       var ico=create('i',{className:'fa-solid fa-camera'});
-      btn.appendChild(ico); btn.appendChild(document.createTextNode(' Kamera Aç'));
+      btn.appendChild(ico); btn.appendChild(document.createTextNode(' Kamera (Yeni)'));
       var bars=document.querySelectorAll('.control');
       if(bars.length) bars[0].appendChild(btn); else document.body.appendChild(btn);
     }
@@ -1372,28 +1266,5 @@ function openPriceView6s(p){
   document.addEventListener('DOMContentLoaded', function(){ ensureUI(); bind(); wire(); });
   var mo=new MutationObserver(wire); mo.observe(document.body,{childList:true,subtree:true});
 })();
-
-function openPriceView6s(p){
-    var mdl=document.getElementById('mdlProduct');
-    if(!mdl) return;
-    document.getElementById('mName').textContent=p.name||'';
-    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
-    document.getElementById('mBarcode').textContent=p.barcode||'';
-    var d=p.priceDate? new Date(p.priceDate):null;
-    document.getElementById('mDateRow').style.display=d?'block':'none';
-    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
-    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
-    // Adet butonlarını gizle
-    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
-    mdl.classList.add('shown');
-    var sec=6; var timer=setInterval(function(){
-        sec--; if(sec<=0){
-            clearInterval(timer);
-            mdl.classList.remove('shown');
-            setTimeout(function(){ window.openCamV3(true); }, 400);
-        }
-    },1000);
-}
-
 </script>
 >
