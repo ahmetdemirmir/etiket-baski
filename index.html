@@ -107,15 +107,8 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     </svg>
     <span>Güncel fiyat listesini al</span>
   </button>
-  <button id="btnOpenCam" class="btn" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#d6dbe6);background:#10b981;color:white;cursor:pointer">
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M23 7l-7 5 7 5V7zM1 5h14v14H1z" fill="currentColor"/>
-    </svg>
-    <span>Kamerayı Aç</span>
-  </button>
   <span id="btnFetchSheetHint" class="hint" style="margin-left:8px;color:#64748b"></span>
 </div>
-
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; **KAMERA ile okutunca ürün popup'ı direkt açılır**.</small>
   </div>
@@ -514,22 +507,23 @@ async function makeOldListDoc(){
 
 })(); // IIFE
 </script>
-</body>
-</html
 <script>
 (() => {
+  // --- CONFIG ---
   const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
 
+  // --- HELPERS ---
+  const $ = (s) => document.getElementById(s);
+
   function norm(s){
-    return (s||"").replace(/^\uFEFF/,'') // strip BOM at start
+    return (s||"").replace(/^\uFEFF/,'')           // strip BOM
       .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // accents
-      .replace(/[._\-()/]/g,' ') // punct -> space
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[._\-()/]/g,' ')                   // punctuation -> space
       .replace(/\s+/g,' ').trim();
   }
 
-  // Parse one CSV line respecting quotes, with chosen delimiter
-  function splitCSV(line, delim){
+  function splitCSV(line, delim){                  // CSV-safe split for a single line
     const out=[]; let cur=""; let q=false;
     for(let i=0;i<line.length;i++){
       const ch=line[i];
@@ -545,28 +539,28 @@ async function makeOldListDoc(){
     return out;
   }
 
-  // Decide delimiter: prefer comma, but if semicolons dominate, use ';'
-  function pickDelimiter(sample){
-    const c = (sample.match(/,/g)||[]).length;
-    const s = (sample.match(/;/g)||[]).length;
-    return s>c ? ';' : ',';
+  function pickDelimiter(sampleText){
+    // count separators on first lines
+    const c = (sampleText.match(/,/g)||[]).length;
+    const s = (sampleText.match(/;/g)||[]).length;
+    return s > c ? ';' : ',';
   }
 
   function scoreHeaders(hs){
     const H = hs.map(norm);
-    let score = 0;
     const hasB = H.some(h=>/^(barkod|ean|ean13|barkod no|barkod numarasi|barkod numarası)$/.test(h));
     const hasA = H.some(h=>/^(stok adi|urun adi|ürün adı|ad|stok|urun|ürün)$/.test(h));
     const hasF = H.some(h=>/^(magaza|mağaza|magaza fiyati|mağaza fiyati|satis fiyati 1|satış fiyatı 1|fiyat|satis fiyati|satış fiyatı)$/.test(h));
     const hasT = H.some(h=>/^(fiyat degisiklik tarihi|fiyat değişiklik tarihi|fiyat tarih|fdt|tarih)$/.test(h));
-    if(hasB) score+=3; if(hasA) score+=2; if(hasF) score+=3; if(hasT) score+=1;
+    let score = 0; if(hasB) score+=3; if(hasA) score+=2; if(hasF) score+=3; if(hasT) score+=1;
     return {score, hasB, hasA, hasF, hasT};
   }
 
+  // --- MAIN ---
   async function fetchCSV(){
-    const btn = document.getElementById('btnFetchSheet');
-    const hint = document.getElementById('btnFetchSheetHint');
-    const fileInput = document.getElementById('fileExcel');
+    const btn = $('btnFetchSheet');
+    const hint = $('btnFetchSheetHint');
+    const fileInput = $('fileExcel');
     if(!btn || !hint || !fileInput) return;
 
     btn.disabled = true; btn.setAttribute('aria-busy','true');
@@ -577,10 +571,12 @@ async function makeOldListDoc(){
       if(!resp.ok) throw new Error("HTTP "+resp.status);
       const text = await resp.text();
 
-      // Look at the first 5 non-empty lines to find the best header row
-      const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0).slice(0,5);
+      const linesAll = text.split(/\r?\n/);
+      const lines = linesAll.filter(l=>l.trim().length>0).slice(0,5);
       const delim = pickDelimiter(lines.join('\n'));
-      let best = {score:-1, idx:0, hs:[]};
+
+      // find best header row among first 5 non-empty lines
+      let best = {score:-1, idx:0, hs:[], meta:null};
       for(let i=0;i<lines.length;i++){
         const hs = splitCSV(lines[i], delim);
         const sc = scoreHeaders(hs);
@@ -592,15 +588,16 @@ async function makeOldListDoc(){
         throw new Error("Required headers missing.");
       }
 
-      // If header row wasn't the very first line, rebuild CSV so header line is first
+      // If header row isn't the first line, move it to top
       let finalText = text;
       if(best.idx !== 0){
-        const rows = text.split(/\r?\n/);
-        const header = rows.splice(best.idx,1)[0];
+        const rows = linesAll.slice();               // clone
+        const header = rows.splice(rows.findIndex(r => r.trim() === lines[best.idx].trim()), 1)[0];
         rows.unshift(header);
         finalText = rows.join('\n');
       }
 
+      // Wrap with BOM and inject to file input -> trigger existing change handler
       const bom = new Uint8Array([0xEF,0xBB,0xBF]);
       const blob = new Blob([bom, finalText], {type: "text/csv"});
       const file = new File([blob], "guncel.csv", {type: "text/csv", lastModified: Date.now()});
@@ -622,16 +619,14 @@ async function makeOldListDoc(){
   }
 
   function wire(){
-    const b1 = document.getElementById('btnFetchSheet');
-    if(b1) b1.addEventListener('click', fetchCSV);
-    const b2 = document.getElementById('btnOpenCam');
-    if(b2) b2.addEventListener('click', () => {
-      try{ if(typeof startCamera === 'function') startCamera(); }catch(e){ alert("Kamera açılamadı: "+e.message); }
-    });
+    const btn = $('btnFetchSheet');
+    if(btn) btn.addEventListener('click', fetchCSV);
+    // Kamera butonu mevcut kodda 'btnCam' ile bağlı; buraya dokunmuyoruz.
   }
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
   else wire();
 })();
 </script>
->
+</body>
+</html>
