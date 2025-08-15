@@ -90,6 +90,11 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <div class="control">
         <button id="btnCart" class="btn neutral" style="font-size:16px"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
         <button id="btnPrint" class="btn success" style="font-size:16px"><i class="fa-solid fa-print"></i> Yazdır</button>
+        
+<button id="btnLoadCsv" class="btn primary">
+  <i class="fa-solid fa-cloud-arrow-down"></i> Google Sheets'ten Yükle
+</button>
+
         <button id="btnCam" class="btn primary" style="font-size:16px">
           <i class="fa-solid fa-camera"></i> Kamera Aç
         </button>
@@ -100,17 +105,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off">
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off">
       <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
-
-<div class="inline-flex items-center gap-2" style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-  <button id="btnFetchSheet" class="btn" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#d6dbe6);background:#0a66c2;color:white;cursor:pointer">
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <span>Güncel fiyat listesini al</span>
-  </button>
-  <span id="btnFetchSheetHint" class="hint" style="margin-left:8px;color:#64748b"></span>
-</div>
-
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; **KAMERA ile okutunca ürün popup'ı direkt açılır**.</small>
   </div>
@@ -509,127 +503,26 @@ async function makeOldListDoc(){
 
 })(); // IIFE
 </script>
-</body>
-</html
+
 <script>
-(() => {
-  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
-  const $ = (s) => document.getElementById(s);
-
-  function norm(s){
-    return (s||"").replace(/^\uFEFF/,'')
-      .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-      .replace(/[._\-()/\t]/g,' ')
-      .replace(/\s+/g,' ').trim();
+$('btnLoadCsv').addEventListener('click', async () => {
+  try {
+    const res = await fetch("https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv");
+    const csvText = await res.text();
+    const wb = XLSX.read(csvText, { type: 'string' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true, cellDates: true });
+    let arr = rowsObj.map(normalizeRow).filter(x => x.barcode && x.name);
+    PRODUCTS = arr;
+    badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Google Sheets)`;
+    if (PRODUCTS.length > 0) showToast('Google Sheets verisi yüklendi');
+    else alert('Uygun satır bulunamadı.');
+  } catch (err) {
+    console.error(err);
+    alert('Google Sheets verisi alınamadı');
   }
-
-  function splitCSV(line, delim){
-    const out=[]; let cur=""; let q=false;
-    for(let i=0;i<line.length;i++){
-      const ch=line[i];
-      if(ch === '"'){
-        if(q && line[i+1] === '"'){ cur+='"'; i++; } else { q=!q; }
-      }else if(ch === delim && !q){ out.push(cur); cur=""; }
-      else{ cur+=ch; }
-    }
-    out.push(cur);
-    return out;
-  }
-
-  function pickDelimiter(sample){
-    const c=(sample.match(/,/g)||[]).length;
-    const s=(sample.match(/;/g)||[]).length;
-    return s>c?';':',';
-  }
-
-  const BARKOD_SET = /^(barkod|ean|ean13|barkod no|barkod numarasi|barkod numarası|urun barkodu|ürün barkodu)$/;
-  const AD_SET     = /^(stok adi|urun adi|ürün adı|ad|stok|urun|ürün|stok ismi|ürün ismi)$/;
-  const FIYAT_SET  = /^(magaza|mağaza|magaza fiyati|mağaza fiyati|satis fiyati 1|satış fiyatı 1|fiyat|satis fiyati|satış fiyatı|perakende fiyati|perakende fiyat|fiyat₺|fiyat tl)$/;
-  const TARIH_SET  = /^(fiyat degisiklik tarihi|fiyat değişiklik tarihi|fiyat tarih|fdt|tarih|degisim tarihi|değişim tarihi)$/;
-
-  function scoreHeaders(hs){
-    const H = hs.map(norm);
-    const hasB = H.some(h=>BARKOD_SET.test(h));
-    const hasA = H.some(h=>AD_SET.test(h));
-    const hasF = H.some(h=>FIYAT_SET.test(h));
-    const hasT = H.some(h=>TARIH_SET.test(h));
-    let score = 0; if(hasB) score+=4; if(hasA) score+=3; if(hasF) score+=3; if(hasT) score+=1;
-    return {score, hasB, hasA, hasF, hasT, normHeaders: H};
-  }
-
-  async function fetchCSV(){
-    const btn = $('btnFetchSheet');
-    const hint = $('btnFetchSheetHint');
-    const fileInput = $('fileExcel');
-    if(!btn || !hint || !fileInput) return;
-
-    btn.disabled = true; btn.setAttribute('aria-busy','true');
-    hint.textContent = "İndiriliyor...";
-
-    try{
-      const resp = await fetch(CSV_URL, {cache:'no-store'});
-      if(!resp.ok) throw new Error("HTTP "+resp.status);
-      const text = await resp.text();
-
-      const allLines = text.split(/\r?\n/);
-      const firstNonEmpty = allLines.filter(l=>l.trim()).slice(0,10);
-      const delim = pickDelimiter(firstNonEmpty.join('\n'));
-
-      let best = {score:-1, idx:0, hs:[], meta:null};
-      for(let i=0;i<firstNonEmpty.length;i++){
-        const hs = splitCSV(firstNonEmpty[i], delim);
-        const sc = scoreHeaders(hs);
-        if(sc.score > best.score) best = {score: sc.score, idx:i, hs, meta:sc};
-      }
-
-      // REQUIRE: Barkod + Ad + (en az 1 fiyat kolonu). Tarih varsa bonus, zorunlu değil.
-      if(!(best.meta && best.meta.hasB && best.meta.hasA && best.meta.hasF)){
-        const dbg = (best.meta && best.meta.normHeaders) ? "Bulunan başlıklar: " + best.meta.normHeaders.join(' | ') : "";
-        hint.textContent = "Başlıklar uyumsuz (Barkod + Ad + Fiyat gerekir).";
-        throw new Error("Required headers missing. " + dbg);
-      }
-
-      let finalText = text;
-      if(best.idx !== 0){
-        // Move detected header row to top
-        const headerLine = firstNonEmpty[best.idx];
-        const rows = allLines.slice();
-        // locate exact line index in original array
-        let headerIdx = rows.findIndex(r => norm(r) === norm(headerLine));
-        if(headerIdx === -1) headerIdx = rows.findIndex(r => r.trim() === headerLine.trim());
-        if(headerIdx === -1) headerIdx = 0;
-        const header = rows.splice(headerIdx,1)[0];
-        rows.unshift(header);
-        finalText = rows.join('\n');
-      }
-
-      const bom = new Uint8Array([0xEF,0xBB,0xBF]);
-      const blob = new Blob([bom, finalText], {type: "text/csv"});
-      const file = new File([blob], "guncel.csv", {type: "text/csv", lastModified: Date.now()});
-
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      fileInput.files = dt.files;
-      fileInput.dispatchEvent(new Event('change', {bubbles:true}));
-
-      hint.textContent = "Tamam: CSV içeri alındı.";
-    }catch(err){
-      console.error(err);
-      hint.textContent = "İndirme/işleme hatası. Başlıkları ve bağlantıyı kontrol edin.";
-      alert("Güncel liste alınamadı: " + err.message);
-    }finally{
-      btn.disabled = false; btn.removeAttribute('aria-busy');
-      setTimeout(()=>{ if(hint.textContent.startsWith("Tamam")) hint.textContent=""; }, 4000);
-    }
-  }
-
-  function wire(){
-    const b = $('btnFetchSheet');
-    if(b) b.addEventListener('click', fetchCSV);
-  }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
-  else wire();
-})();
+});
 </script>
->
+
+</body>
+</html>
