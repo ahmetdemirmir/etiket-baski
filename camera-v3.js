@@ -1,233 +1,157 @@
 
+// camx.js — Clean Quagga2 camera integration (fresh reset)
 (function(){
-  'use strict';
+  var quaggaLoaded=false, quaggaLoading=false, quaggaRunning=false, initLock=false;
+  var lastCode=null, lastHit=0; var camSheet=null, camMount=null;
+
   function $(id){ return document.getElementById(id); }
-  function create(t,p,s){ var e=document.createElement(t); if(p)Object.keys(p).forEach(function(k){e[k]=p[k];}); if(s)Object.keys(s).forEach(function(k){e.style[k]=s[k];}); return e; }
-  function validEAN13(c){ if(!/^\d{13}$/.test(c)) return false; var s=c.split('').map(Number),sum=0; for(var i=0;i<12;i++) sum+=s[i]*(i%2?3:1); return ((10-(sum%10))%10)===s[12]; }
-  function beepFx(ok){ try{ if(typeof window.beep==='function') window.beep(ok); else if(navigator.vibrate) navigator.vibrate(ok?[40]:[20,30,20]); }catch(_e){} }
 
-  // === UI bootstrap ===
-  function ensureUI(){
-    if(!$('btnCamV3')){
-      var b=create('button',{id:'btnCamV3',className:'btn primary'});
-      b.style.marginLeft='8px';
-      b.appendChild(create('i',{className:'fa-solid fa-camera'}));
-      b.appendChild(document.createTextNode(' Kamera (Yeni)'));
-      var bars=document.querySelectorAll('.control'); if(bars.length) bars[0].appendChild(b); else document.body.appendChild(b);
+  function ensureButtons(){
+    var btnPrint = $('btnPrint'); if(!btnPrint) return;
+    if(!$('btnCamX')){
+      var cam = document.createElement('button'); cam.id='btnCamX'; cam.className='btn primary'; cam.style.fontSize='16px';
+      cam.innerHTML='<i class="fa-solid fa-camera"></i> Kamera Aç';
+      btnPrint.insertAdjacentElement('afterend', cam);
+      cam.addEventListener('click', openCamSheet);
     }
-    if(!$('mdlCamV3')){
-      var o=create('div',{id:'mdlCamV3'},{position:'fixed',left:'0',top:'0',right:'0',bottom:'0',background:'rgba(0,0,0,.55)',display:'none',zIndex:'9998'});
-      var box=create('div',{className:'box'},{width:'min(96vw,720px)',maxHeight:'92vh',overflow:'auto',padding:'10px',background:'#fff',borderRadius:'12px',margin:'4vh auto'});
-      var h=create('h3',null,{margin:'6px 10px 10px'}); h.textContent='Barkod Tara (Yeni Motor)'; box.appendChild(h);
-      var bar=create('div',null,{display:'flex',gap:'8px',alignItems:'center',margin:'0 10px 8px',flexWrap:'wrap'});
-      var sel=create('select',{id:'camSelectV3',className:'input'},{minWidth:'220px',flex:'1'});
-      var tw=create('label',null,{display:'flex',alignItems:'center',gap:'6px'});
-      var torch=create('input',{id:'chkTorchV3',type:'checkbox'});
-      tw.appendChild(torch); tw.appendChild(document.createTextNode('Flaş'));
-      var zw=create('div',null,{display:'flex',alignItems:'center',gap:'6px'});
-      zw.appendChild(document.createTextNode('Zoom'));
-      var rng=create('input',{id:'rngZoomV3',type:'range'},{width:'140px'}); rng.min='1'; rng.max='1'; rng.step='0.1'; rng.value='1';
-      var p=create('button',{id:'btnCamPauseV3',className:'btn neutral'}); p.textContent='Durdur';
-      var c=create('button',{id:'btnCamCloseV3',className:'btn danger'}); c.textContent='Kapat';
-      bar.appendChild(sel); bar.appendChild(tw); bar.appendChild(zw); zw.appendChild(rng); bar.appendChild(p); bar.appendChild(c); box.appendChild(bar);
-      var area=create('div',null,{padding:'0 10px 10px'});
-      var v=create('video',{id:'camVideoV3',playsInline:true,autoplay:true,muted:true},{width:'100%',border:'1px solid #d6dbe6',borderRadius:'12px',background:'#000'});
-      var canvas=create('canvas',{id:'camCanvasV3'},{display:'none'});
-      area.appendChild(v); area.appendChild(canvas); box.appendChild(area);
-      var hint=create('small',{className:'hint'},{display:'block',margin:'0 12px 4px',color:'#64748b'});
-      hint.textContent='İpucu: Okutunca kamera kapanır, seçim bitince otomatik tekrar açılır.'; box.appendChild(hint);
-      o.appendChild(box);
-      o.addEventListener('click', function(ev){ if(ev.target && ev.target.id==='mdlCamV3'){ stopAll(); }});
-      document.body.appendChild(o);
-    }
-  }
-  function show(){ $('mdlCamV3').style.display='block'; }
-  function hide(){ $('mdlCamV3').style.display='none'; }
-
-  // === Engine ===
-  var stream=null,track=null,detector=null,running=false,paused=false,failCount=0,lastCode='',lastTs=0;
-  var foundLock=false, resumeAfter=false;
-
-  function supported(){ try{ return ('BarcodeDetector' in window); }catch(_e){ return false; } }
-  async function listCameras(){ var devs=await navigator.mediaDevices.enumerateDevices(); return devs.filter(function(d){ return d.kind==='videoinput'; }); }
-
-  async function start(deviceId){
-    if(stream) await stop();
-    var cs={ audio:false, video:{ deviceId: deviceId? {exact:deviceId}:undefined, facingMode: deviceId? undefined : {ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} } };
-    stream=await navigator.mediaDevices.getUserMedia(cs);
-    var v=$('camVideoV3'); v.srcObject=stream;
-    track=stream.getVideoTracks()[0];
-    var caps=track.getCapabilities?track.getCapabilities():{}; var sets=track.getSettings?track.getSettings():{};
-    try{ await track.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); }catch(_e){}
-    var rng=$('rngZoomV3'); if(caps.zoom){ rng.min=caps.zoom.min||1; rng.max=caps.zoom.max||1; rng.step=caps.zoom.step||0.1; rng.value=sets.zoom||rng.min; rng.disabled=false; } else { rng.min='1'; rng.max='1'; rng.value='1'; rng.disabled=true; }
-    $('chkTorchV3').disabled = !caps.torch;
-    paused=false; running=true; $('btnCamPauseV3').textContent='Durdur';
-    detector=null;
-    if(supported()){ try{ var fmts=(BarcodeDetector.getSupportedFormats && await BarcodeDetector.getSupportedFormats())||[]; detector = (fmts && fmts.indexOf('ean_13')>-1)? new BarcodeDetector({formats:['ean_13','ean_8','code_128']}): new BarcodeDetector(); }catch(_e){ detector=null; } }
-    requestAnimationFrame(loop);
-  }
-
-  async function stop(){
-    running=false;
-    try{ if(track) track.stop(); }catch(_e){}
-    try{ if(stream) stream.getTracks().forEach(function(t){ try{t.stop();}catch(_e){} }); }catch(_e){}
-    stream=null; track=null; detector=null;
-  }
-  async function stopAll(){ resumeAfter=false; await stop(); hide(); }
-
-  async function loop(){
-    if(!running || paused){ return; }
-    var v=$('camVideoV3'); if(v.readyState<2){ requestAnimationFrame(loop); return; }
-    if(detector){
-      try{ var arr=await detector.detect(v); if(arr && arr.length){ onCode(arr[0].rawValue||''); failCount=0; } else onFail(); }
-      catch(_e){ onFail(); }
-      requestAnimationFrame(loop); return;
-    }
-    onFail(); requestAnimationFrame(loop);
-  }
-
-  function onFail(){
-    failCount++;
-    if(track && track.getCapabilities){
-      var caps=track.getCapabilities();
-      if(caps.zoom && failCount % 40 === 0){
-        var s=track.getSettings(); var step=caps.zoom.step||0.25;
-        var next=Math.min((s.zoom||1)+step, caps.zoom.max||s.zoom||1);
-        track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
-        $('rngZoomV3').value = String(next);
-      }
+    if(!$('btnPriceView')){
+      var pv = document.createElement('button'); pv.id='btnPriceView'; pv.className='btn warning'; pv.style.fontSize='16px';
+      pv.innerHTML='<i class="fa-solid fa-tag"></i> Fiyat Gör';
+      btnPrint.insertAdjacentElement('afterend', pv);
+      pv.addEventListener('click', function(){ window.__priceViewMode=true; $('btnCamX').click(); });
     }
   }
 
-  // Detect when modals open/close
-  var SEARCH_IDS = ['mdlSearch','searchModal','search-popup'];
-  var PRODUCT_IDS = ['mdlProduct','productModal','product-popup','productDetail','productDetails','mdlUrun','urunModal'];
-  function isShown(el){
-    if(!el) return false;
-    var cs = window.getComputedStyle(el);
-    if(el.className && /(^|\s)shown(\s|$)/.test(el.className)) return true;
-    return !(cs.display==='none' || cs.visibility==='hidden' || cs.opacity==='0');
+  function injectSheet(){
+    if(camSheet) return;
+    camSheet = document.createElement('div');
+    camSheet.id='camSheet';
+    camSheet.innerHTML = '\
+    <style>\
+    #camSheet{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:none}\
+    #camBox{position:absolute;left:50%;top:8%;transform:translateX(-50%);width:min(96vw,720px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden}\
+    #camHead{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb}\
+    #camMount{position:relative;width:100%;height:380px;background:#000}\
+    #camMount video,#camMount canvas,#camMount #interactive{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}\
+    #camFoot{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;background:#fafafa}\
+    </style>\
+    <div id="camBox">\
+      <div id="camHead"><b>Kamera</b><div>\
+        <button id="camClose" class="btn">Kapat</button>\
+      </div></div>\
+      <div id="camMount"></div>\
+      <div id="camFoot">\
+        <button id="camStop" class="btn">Durdur</button>\
+      </div>\
+    </div>';
+    document.body.appendChild(camSheet);
+    $('camClose').addEventListener('click', closeCamSheet);
+    $('camStop').addEventListener('click', stopQuagga);
+    camMount = $('camMount');
   }
-  function watchModal(el){
-    if(!el || el.__camWatch) return;
-    var obs = new MutationObserver(function(){
-      var vis = isShown(el);
-      if(!vis && resumeAfter){
-        resumeAfter = false;
-        foundLock = false;
-        setTimeout(function(){ try{ openModal(); }catch(_e){} }, 120);
-      }
+
+  function loadQuagga(){
+    return new Promise(function(resolve, reject){
+      if(quaggaLoaded) return resolve();
+      if(quaggaLoading) return resolve();
+      quaggaLoading = true;
+      var s=document.createElement('script');
+      s.src='https://unpkg.com/@ericblade/quagga2/dist/quagga.js';
+      s.onload=function(){ quaggaLoaded=true; resolve(); };
+      s.onerror=function(){ alert('Quagga kütüphanesi yüklenemedi'); reject(); };
+      document.head.appendChild(s);
     });
-    obs.observe(el, { attributes:true, attributeFilter:['class','style','hidden'] });
-    el.__camWatch = obs;
-  }
-  function scanForModals(){
-    SEARCH_IDS.concat(PRODUCT_IDS);
-    var i, id, el;
-    for(i=0;i<SEARCH_IDS.length;i++){ id=SEARCH_IDS[i]; el=$(id); if(el) watchModal(el); }
-    for(i=0;i<PRODUCT_IDS.length;i++){ id=PRODUCT_IDS[i]; el=$(id); if(el) watchModal(el); }
-    // generic fallback
-    var gens = document.querySelectorAll('.modal,[role="dialog"]');
-    for(i=0;i<gens.length;i++){ watchModal(gens[i]); }
-  }
-  function tryAutoStopOnSearchOpen(){
-    // if a search modal is visible, stop camera now
-    var i, el;
-    for(i=0;i<SEARCH_IDS.length;i++){ el=$(SEARCH_IDS[i]); if(el && isShown(el)){ resumeAfter=true; stop(); hide(); return true; } }
-    // generic check
-    var gens = document.querySelectorAll('.modal,[role="dialog"]');
-    for(i=0;i<gens.length;i++){ if(isShown(gens[i])){ resumeAfter=true; stop(); hide(); return true; } }
-    return false;
   }
 
-  function onCode(text){
-    if(foundLock) return;
-    var now=Date.now(); var code=String(text||'').replace(/\D/g,'');
-    if(!code) return;
-    if(code===lastCode && (now-lastTs)<1200) return;
-    lastCode=code; lastTs=now;
-    if(/^\d{13}$/.test(code) && !validEAN13(code)){ beepFx(false); return; }
+  function openCamSheet(){
+    window.__priceViewMode = !!window.__priceViewMode;
+    injectSheet();
+    camSheet.style.display='block';
+    startQuagga();
+  }
 
-    var match=null;
-    try{
-      if(window.PRODUCTS && Array.isArray(PRODUCTS)){
-        var norm=function(x){ return String(x||'').replace(/\D/g,''); };
-        match = PRODUCTS.find(function(p){ return norm(p.barcode)===code; });
-        if(!match){
-          var last6=code.slice(-6);
-          var cands=PRODUCTS.filter(function(p){ var b=norm(p.barcode); return b && b.slice(-6)===last6; });
-          if(cands.length===1) match=cands[0];
+  function closeCamSheet(){
+    stopQuagga().then(function(){ camSheet.style.display='none'; });
+  }
+
+  function startQuagga(){
+    if(initLock) return;
+    initLock = true;
+    loadQuagga().then(async function(){
+      try{
+        camMount.innerHTML='';
+        var tries=0;
+        while((camMount.offsetWidth<100 || camMount.offsetHeight<100) && tries<12){
+          await new Promise(r=>requestAnimationFrame(r)); tries++;
         }
-      }
-    }catch(_e){}
+        if(camMount.offsetWidth<100 || camMount.offsetHeight<100) camMount.style.height='380px';
 
-    if(match){
-      foundLock = true;
-      resumeAfter = true;
-      try{ beepFx(true); }catch(_e){}
-      try{ hide(); }catch(_e){}
-      try{ stop(); }catch(_e){}
-      setTimeout(function(){
-        try{ var ms=$('mdlSearch'); if(ms) ms.classList.remove('shown'); }catch(_e){}
-        try{ if (window.__priceViewMode && typeof openPriceView===\'function\') openPriceView(match); else if(typeof openProduct===\'function\') openProduct(match); }catch(_e){}
-      }, 50);
-      return;
-    }
-
-    // eşleşme yoksa mevcut akışı tetikle (son 6), ve arama popup'ı açılır açılmaz durdur
-    var inp=$('inpBarcode');
-    if(inp){ inp.value=code.slice(-6); try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(_e){} }
-    beepFx(true);
-    setTimeout(tryAutoStopOnSearchOpen, 80);
-  }
-
-  // === Controls ===
-  function bind(){
-    var rng=$('rngZoomV3');
-    rng.addEventListener('input', function(){
-      if(!track || !track.applyConstraints) return;
-      var z=parseFloat(rng.value||'1');
-      track.applyConstraints({ advanced:[{ zoom:z }] }).catch(function(){});
-    });
-    $('chkTorchV3').addEventListener('change', function(){
-      if(!track || !track.applyConstraints) return;
-      var on=$('chkTorchV3').checked;
-      track.applyConstraints({ advanced:[{ torch: !!on }] }).catch(function(){ $('chkTorchV3').checked=false; });
-    });
-    $('camVideoV3').addEventListener('click', function(){
-      if(!track || !track.getCapabilities) return;
-      var caps=track.getCapabilities(); if(!caps.zoom) return;
-      var cur=parseFloat(($('rngZoomV3').value)||'1');
-      var next=Math.min(cur+(caps.zoom.step||0.25), caps.zoom.max||cur);
-      $('rngZoomV3').value=String(next);
-      track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
+        var cfg={
+          inputStream:{ type:'LiveStream', target:camMount,
+            constraints:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} },
+            area:{ top:'20%', right:'10%', left:'10%', bottom:'20%' } },
+          locator:{ patchSize:'large', halfSample:false },
+          numOfWorkers: Math.max(1,(navigator.hardwareConcurrency||2)-1),
+          frequency:12,
+          decoder:{ readers:['ean_reader','ean_8_reader','code_128_reader'] },
+          locate:true
+        };
+        Quagga.init(cfg, function(err){
+          initLock=false;
+          if(err){ alert('Kamera başlatma hatası: '+err); return; }
+          Quagga.start(); quaggaRunning=true;
+          try{ var track=Quagga.cameraAccess.getActiveTrack();
+            if(track&&track.applyConstraints){ track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{}); }
+          }catch(e){}
+          try{ Quagga.offDetected && Quagga.offDetected(); }catch(e){}
+          Quagga.onDetected(onDetected);
+        });
+      }catch(e){ initLock=false; alert('Kamera başlatılamadı: '+e); }
     });
   }
 
-  async function openModal(){
-    foundLock = false;
-    show();
+  function stopQuagga(){
+    return new Promise(function(resolve){
+      try{ Quagga && Quagga.offDetected && Quagga.offDetected(); }catch(e){}
+      try{ quaggaRunning && Quagga.stop(); quaggaRunning=false; }catch(e){}
+      try{ camMount && (camMount.innerHTML=''); }catch(e){}
+      resolve();
+    });
+  }
+
+  function isValidEAN13(code){
+    if(!/^\\d{13}$/.test(code)) return false;
+    var sum=0; for(var i=0;i<12;i++) sum += parseInt(code[i],10)*(i%2===0?1:3);
+    return ((10-(sum%10))%10) === parseInt(code[12],10);
+  }
+
+  function findProductByBarcode(code){
     try{
-      var cams = await listCameras();
-      var sel=$('camSelectV3'); sel.innerHTML='';
-      cams.forEach(function(d,i){ var o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||('Kamera '+(i+1)); sel.appendChild(o); });
-      var back=cams.find(function(d){ return /back|arka|environment|rear/i.test(d.label||''); });
-      sel.value = back ? back.deviceId : (cams[0]? cams[0].deviceId : '');
-      await start(sel.value);
-      sel.onchange = async function(){ await start(sel.value); };
-    }catch(e){
-      alert('Kamera listesi alınamadı. Tarayıcı izni gerekebilir.');
-    }
+      var arr = window.PRODUCTS || [];
+      return arr.find(function(p){ return p.barcode===code; });
+    }catch(e){ return null; }
   }
 
-  function wire(){
-    var b=$('btnCamV3'); if(b && !b.__wired){ b.__wired=true; b.addEventListener('click', function(){ openModal(); }); }
-    var bc=$('btnCamCloseV3'); if(bc && !bc.__wired){ bc.__wired=true; bc.addEventListener('click', function(){ stopAll(); }); }
-    var bp=$('btnCamPauseV3'); if(bp && !bp.__wired){ bp.__wired=true; bp.addEventListener('click', function(e){ if(!running) return; if(!paused){ paused=true; e.target.textContent='Devam Et'; } else { paused=false; e.target.textContent='Durdur'; requestAnimationFrame(loop); } }); }
-    window.addEventListener('pagehide', stopAll);
+  function onDetected(result){
+    var code = result && result.codeResult && result.codeResult.code ? result.codeResult.code : null;
+    if(!code) return;
+    var now=Date.now(); if(code===lastCode && (now-lastHit)<900) return; lastCode=code; lastHit=now;
+    if(code.length===13 && !isValidEAN13(code)) return;
+
+    stopQuagga().then(function(){
+      camSheet.style.display='none';
+      var p = findProductByBarcode(code);
+      if (window.__priceViewMode && typeof window.openPriceView==='function' && p){
+        window.openPriceView(p);
+      } else if (typeof window.openProduct==='function' && p){
+        window.openProduct(p);
+      } else {
+        var inp = $('inpBarcode'); if(inp){ inp.value=code.slice(-6); try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){} }
+      }
+      try{ if(navigator.vibrate) navigator.vibrate(35); }catch(e){}
+    });
   }
 
-  document.addEventListener('DOMContentLoaded', function(){ ensureUI(); bind(); wire(); scanForModals(); });
-  var mo=new MutationObserver(function(){ wire(); scanForModals(); });
-  mo.observe(document.body,{childList:true,subtree:true});
+  function init(){ ensureButtons(); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
