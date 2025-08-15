@@ -194,6 +194,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 <div id="work" style="position:fixed;left:-9999px;top:-9999px;opacity:0"></div>
 
 <script>
+window.__camWasOpen = false;
 (function () {
 /* ===== STATE ===== */
 let PRODUCTS=[]; let CART=JSON.parse(localStorage.getItem('etiket_cart')||'[]'); let LAST_RESULTS=[];
@@ -260,9 +261,17 @@ function openProduct(p){
   const old=isOld(p); $('mOld').style.display=old?'block':'none';
   mdl.classList.add('shown');
   mdl.querySelectorAll('[data-qty]').forEach(b=> b.onclick=()=> addToCart(p,parseInt(b.dataset.qty),old));
-  $('btnCustom').onclick=()=>{ const q=parseInt(prompt('Kaç adet?','1')); if(q>0) addToCart(p,q,old); };
-  $('btnCancel').onclick=()=>{ mdl.classList.remove('shown'); refocusAfterAction(true); };
+  $('btnCustom').onclick=()=>{ const q=parseInt(prompt('Kaç adet?','1')); if(q>0){ 
+    addToCart(p,q,old); 
+    try{ if(window.__camWasOpen){ window.__camWasOpen=false; setTimeout(()=>{ try{ window.__openCam && window.__openCam(); }catch(e){} }, 300); } }catch(e){} 
+  } };
+  $('btnCancel').onclick=()=>{ 
+    mdl.classList.remove('shown'); 
+    try{ if(window.__camWasOpen){ window.__camWasOpen=false; setTimeout(()=>{ try{ window.__openCam && window.__openCam(); }catch(e){} }, 300); } }catch(e){} 
+    refocusAfterAction(true); 
+  };
 }
+
 function addToCart(p,qty,isOld){
   const idx = CART.findIndex(x => x.barcode === p.barcode);
   if (idx > -1) CART[idx].qty += qty;
@@ -848,7 +857,7 @@ if(window.__DEV_TEST__) runTests();
     sheet.style.display='block';
     setTimeout(startCamera, 160);
   };
-  window.closeCam = function(){ stopCamera().then(function(){ try{ var m=document.getElementById('camMount'); if(m) m.innerHTML=''; }catch(e){} resetNoDetTimer(); starting=false; setBtnBusy(false); sheet.style.display='none'; }); };
+  window.closeCam = function(){ stopCamera().then(function(){ try{ var m=document.getElementById('camMount'); if(m) m.innerHTML=''; }catch(e){} resetNoDetTimer(); starting=false; setBtnBusy(false); sheet.style.display='none'; });  try{ setBtnBusy(false); }catch(e){} };
 
   async function startCamera(){
     if(starting || scanning || quaggaRunning) return;
@@ -969,30 +978,34 @@ if(window.__DEV_TEST__) runTests();
     mo2.observe(document.body,{subtree:true, childList:true});
   }catch(e){}
 
-  function onDetected(code){
+  async function onDetected(code){
     if(!code) return;
     var now=Date.now();
     if(code===lastCode && (now-lastHit)<900) return;
     lastCode=code; lastHit=now;
     if(code.length===13 && !isValidEAN13(code)) return;
 
+    // Kamerayı tam kapat ve UI'yi serbest bırak
     pauseDetection(true);
     resetNoDetTimer();
-    try{ window.closeCam(); }catch(e){}
-      resumeAfter=true; tryResume();
-      // normalize products if not yet
-      try{ if(Array.isArray(window.PRODUCTS) && !window.__productsNormalized) window.normalizeProductsInPlace(); }catch(e){}
-      var p = findProduct(code);
-      if (window.__priceViewMode && typeof window.openPriceView==='function' && p){
-        window.openPriceView(p);
-      } else if (typeof window.openProduct==='function' && p){
-        window.openProduct(p);
-      } else {
-        var inp = $('inpBarcode');
-        if(inp){ inp.value = code.slice(-6); try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){} }
-      }
-      try{ if(navigator.vibrate) navigator.vibrate(35); }catch(e){}
-    });
+    window.__camWasOpen = true;
+    try { await stopCamera(); } catch(e) {}
+    try { setBtnBusy(false); } catch(e) {}
+    try { if(sheet) sheet.style.display='none'; } catch(e){}
+
+    // Ürünü bul ve direkt popup aç
+    try{ if(Array.isArray(window.PRODUCTS) && !window.__productsNormalized) window.normalizeProductsInPlace(); }catch(e){}
+    var p = findProduct(code);
+    if (window.__priceViewMode && typeof window.openPriceView==='function' && p){
+      window.openPriceView(p);
+    } else if (typeof window.openProduct==='function' && p){
+      window.openProduct(p);
+    } else {
+      alert('Ürün bulunamadı: ' + code);
+      // Ürün bulunamazsa kamerayı hemen tekrar aç
+      try{ window.__camWasOpen=false; window.__openCam && window.__openCam(); }catch(e){}
+    }
+    try{ if(navigator.vibrate) navigator.vibrate(35); }catch(e){}
   }
 
   function bind(){
