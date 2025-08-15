@@ -271,7 +271,7 @@ function mapRowByKeys(r){
   const BAR = K(['barkod','barkod no','barkod numarasi','barcode','ean','ean13','urun barkodu','ürün barkodu','brkd']);
   const NAME= K(['stok adi','urun adi','ürün adı','ad','isim','aciklama','açıklama','malzeme adi']);
   const PRICE=K(['magaza','mağaza','fiyat','satis fiyati','satış fiyatı','sf1','sf 1','fiyat1','fiyat 1','satis fiyati 1','satış fiyatı 1']);
-  const DATE =K(['fiyat degisiklik tarihi','fiyat değişiklik tarihi','fd','fdt','degisiklik tarihi','değişiklik tarihi','fiyat tarih','fiyat guncelleme tarihi','fiyat güncelleme tarihi']);
+  const DATE =K(['fiyat degisiklik tarihi','fiyat değişiklik tarihi','fd','fdt','degisiklik tarihi','değişiklik tarihi','fiyat tarih','fiyat guncelleme tarihi','fiyat güncelleme tarihi','satis fiyati 1 deg tar','satış fiyatı 1 değ tar','satış fiyatı 1 değ. tar.','satış fiyatı 1 değ. tar','satis fiyati 1 deg tar.','satis fiyati 1 degisiklik tar','satış fiyatı 1 değişiklik tar','satis fiyati 1 degisiklik tarihi','satış fiyatı 1 değiş. tar.']);
   function pick(dict, candidates){
     for(const k of candidates){
       if(k in dict && dict[k]!=='' && dict[k]!=null) return dict[k];
