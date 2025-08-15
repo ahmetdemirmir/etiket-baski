@@ -201,11 +201,92 @@ const refocusAfterAction=(clear=false)=>{ if(IS_DESKTOP){ if(clear){ inpBarcode.
 
 /* normalizasyon yardımcıları */
 const fromSci=(str)=>{const m=String(str).toLowerCase().match(/^(\d+(?:\.\d+)?)e\+(\d+)$/);if(!m) return String(str);const d=m[1].replace('.','');const dec=(m[1].split('.')[1]||'').length;const exp=+m[2];return d+'0'.repeat(Math.max(0,exp-dec));};
-function parseBarcode(v){ if(v===undefined||v===null)return''; if(typeof v==='number'){const s=String(v);return s.includes('e+')?fromSci(s).replace(/\D/g,''):s.replace(/\D/g,'');} const s=String(v).trim(); if(/e\+\d+$/i.test(s)) return fromSci(s).replace(/\D/g,''); return s.replace(/[^0-9]/g,''); }
-function parsePrice(v){ if(v===undefined||v===null||v==='')return 0; if(typeof v==='number')return v; const s=String(v).replace(/[₺\s]/g,'').replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return Number.isNaN(n)?0:n; }
-function parseExcelDate(v){ if(!v&&v!==0)return null; if(v instanceof Date&&!isNaN(v))return v; if(typeof v==='number'){const epoch=new Date(1899,11,30);return new Date(epoch.getTime()+v*86400000);} const str=String(v).trim(); const m=str.match(/(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/); if(m){const d=new Date(+m[3],+m[2]-1,+m[1],m[4]||0,m[5]||0,m[6]||0); if(!isNaN(d))return d;} if(/^\d{8}$/.test(str)){const y=str.slice(0,4),mo=str.slice(4,6),da=str.slice(6,8); const d=new Date(+y,+mo-1,+da); if(!isNaN(d))return d;} const d=new Date(str); return isNaN(d)?null:d; }
-function mapRowByKeys(row){ const nk={};Object.keys(row).forEach(k=>nk[normKey(k)]=k); const pick=(syns)=>{for(const s of syns){for(const k in nk){if(k===s||k.includes(s))return row[nk[k]];}} return undefined;}; const barcode=pick(['barkod','barkodno','barkodu','ean','ean13']); const name=pick(['stokadi','urunadi','adi','ad','stok','aciklama']); const price=pick(['magaza','magazasatis','magazasatisfiyati','magazafiyati','satisfiyati1','satisfiyat1','sf1','fiyat','perakendesatis']); const date=pick(['satisfiyati1degtar','satisfiyati1degtarihi','fiyatdegisikliktarihi','fiyatdegtarihi','fdtarihi','degisiktarihi','degistarihi','fiyatguncellemetarihi']); return {barcode,name,price,date}; }
-function normKey(s){return String(s||'').toLowerCase().replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');}
+function parseBarcode(v){
+  if(v==null) return '';
+  let s = String(v).trim();
+  if(/e\+\d+$/i.test(s)){
+    try {
+      const parts = s.toLowerCase().split('e+');
+      const base = parts[0].replace('.','');
+      const pow = parseInt(parts[1]||'0',10);
+      const decimals = (parts[0].split('.')[1]||'').length;
+      const zeros = Math.max(pow - decimals, 0);
+      s = base + '0'.repeat(zeros);
+    } catch(_){}
+  }
+  s = s.replace(/[^\d]/g,'');
+  if(s.length>=8 && s.length<=20) return s;
+  return s;
+}
+function parsePrice(v){
+  if(v==null || v==='') return null;
+  let s = String(v).toLowerCase();
+  s = s.replace(/tl|try|₺|\s/g,'');
+  if(s.includes('.') && s.includes(',')){
+    s = s.replace(/\./g,'').replace(',', '.');
+  } else if(s.includes(',')){
+    s = s.replace(',', '.');
+  }
+  s = s.replace(/(\d)\.(?=\d{3}(\D|$))/g, '$1');
+  const num = parseFloat(s);
+  return isNaN(num) ? null : num;
+}
+function parseExcelDate(v){
+  if(!v && v!==0) return null;
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  let s = String(v).trim();
+  if(/^\d{3,5}$/.test(s)){
+    const serial = parseInt(s,10);
+    const epoch = new Date(Date.UTC(1899,11,30));
+    const ms = serial * 86400000;
+    const d = new Date(epoch.getTime()+ms);
+    return d.toISOString().slice(0,10);
+  }
+  if(/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)){
+    const d = new Date(s);
+    if(!isNaN(d)) return d.toISOString().slice(0,10);
+  }
+  let m = s.match(/^(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})$/);
+  if(m){
+    const dd=parseInt(m[1],10), mm=parseInt(m[2],10), yyyy=parseInt(m[3],10);
+    const d = new Date(Date.UTC(yyyy,mm-1,dd));
+    return d.toISOString().slice(0,10);
+  }
+  m = s.match(/^(\d{1,2})\-(\d{1,2})\-(\d{4})$/);
+  if(m){
+    const mm=parseInt(m[1],10), dd=parseInt(m[2],10), yyyy=parseInt(m[3],10);
+    const d = new Date(Date.UTC(yyyy,mm-1,dd));
+    return d.toISOString().slice(0,10);
+  }
+  return s || null;
+}
+function mapRowByKeys(r){
+  const out = {};
+  if(r && typeof r==='object' && !Array.isArray(r)){
+    for(const k of Object.keys(r)){
+      out[normalizeKey(k)] = r[k];
+    }
+  }
+  const K = (arr)=>arr.map(normalizeKey);
+  const BAR = K(['barkod','barkod no','barkod numarasi','barcode','ean','ean13','urun barkodu','ürün barkodu','brkd']);
+  const NAME= K(['stok adi','urun adi','ürün adı','ad','isim','aciklama','açıklama','malzeme adi']);
+  const PRICE=K(['magaza','mağaza','fiyat','satis fiyati','satış fiyatı','sf1','sf 1','fiyat1','fiyat 1','satis fiyati 1','satış fiyatı 1']);
+  const DATE =K(['fiyat degisiklik tarihi','fiyat değişiklik tarihi','fd','fdt','degisiklik tarihi','değişiklik tarihi','fiyat tarih','fiyat guncelleme tarihi','fiyat güncelleme tarihi']);
+  function pick(dict, candidates){
+    for(const k of candidates){
+      if(k in dict && dict[k]!=='' && dict[k]!=null) return dict[k];
+      const hit = Object.keys(dict).find(x=>x.includes(k));
+      if(hit) return dict[hit];
+    }
+    return null;
+  }
+  return {
+    barcode: pick(out,BAR),
+    name:    pick(out,NAME),
+    price:   pick(out,PRICE),
+    date:    pick(out,DATE)
+  };
+}
 function normalizeRow(r){ const m=mapRowByKeys(r); return { barcode:parseBarcode(m.barcode), name:String(m.name||'').trim(), price:parsePrice(m.price), priceDate:parseExcelDate(m.date) }; }
 /* ===== CLOUD FETCH (Google Apps Script) ===== */
 const CLOUD_URL = "https://script.google.com/macros/s/AKfycbymC0KeZ-EHPnL4et5bmFLazdvd2ZU-FgWxXcg7sfIU-MHwV1_gvgp5muzwFlwZTDhy/exec";
@@ -224,8 +305,24 @@ function _rowsFromJson(data){
 }
 
 function rowsToProducts(rows){
-  // rows can be array of objects or array of arrays (with header row)
   let out=[];
+  if(!rows) return out;
+  if(!Array.isArray(rows) && typeof rows==='object'){
+    const h = rows.headers || rows.header;
+    const rr = rows.rows || rows.values || rows.data || rows.items;
+    if(Array.isArray(h) && Array.isArray(rr)){
+      const header = h.map(x=>String(x||''));
+      for(let i=0;i<rr.length;i++){
+        const line = rr[i]||[]; const o={};
+        for(let j=0;j<header.length;j++){ o[header[j]] = line[j]; }
+        const n = normalizeRow(o);
+        if(n.barcode&&n.name) out.push(n);
+      }
+      return out;
+    }
+    const nested = rows.result || rows.payload || rows.sheet || rows;
+    if(nested && nested!==rows) return rowsToProducts(nested);
+  }
   if(!Array.isArray(rows)) return out;
   if(rows.length===0) return out;
   if(!Array.isArray(rows[0]) && typeof rows[0]==='object'){
