@@ -113,9 +113,17 @@
     var obs = new MutationObserver(function(){
       var vis = isShown(el);
       if(!vis && resumeAfter){
-        resumeAfter = false;
-        foundLock = false;
-        setTimeout(function(){ try{ openModal(); }catch(_e){} }, 120);
+        setTimeout(function(){
+          try {
+            var nodes = document.querySelectorAll('.modal,[role="dialog"]');
+            var anyOpen = false;
+            for (var i=0;i<nodes.length;i++){ if(isShown(nodes[i])){ anyOpen = true; break; } }
+            if(anyOpen) return;
+            resumeAfter = false;
+            foundLock = false;
+            setTimeout(function(){ try{ openModal(); }catch(_e){} }, 120);
+          } catch(_e){}
+        }, 60);
       }
     });
     obs.observe(el, { attributes:true, attributeFilter:['class','style','hidden'] });
