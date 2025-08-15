@@ -7,10 +7,102 @@
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
+function openPriceView6s(p){
+    var mdl=document.getElementById('mdlProduct');
+    if(!mdl) return;
+    document.getElementById('mName').textContent=p.name||'';
+    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
+    document.getElementById('mBarcode').textContent=p.barcode||'';
+    var d=p.priceDate? new Date(p.priceDate):null;
+    document.getElementById('mDateRow').style.display=d?'block':'none';
+    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
+    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
+    // Adet butonlarını gizle
+    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
+    mdl.classList.add('shown');
+    var sec=6; var timer=setInterval(function(){
+        sec--; if(sec<=0){
+            clearInterval(timer);
+            mdl.classList.remove('shown');
+            setTimeout(function(){ window.openCamV3(true); }, 400);
+        }
+    },1000);
+}
+
+</script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js">
+function openPriceView6s(p){
+    var mdl=document.getElementById('mdlProduct');
+    if(!mdl) return;
+    document.getElementById('mName').textContent=p.name||'';
+    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
+    document.getElementById('mBarcode').textContent=p.barcode||'';
+    var d=p.priceDate? new Date(p.priceDate):null;
+    document.getElementById('mDateRow').style.display=d?'block':'none';
+    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
+    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
+    // Adet butonlarını gizle
+    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
+    mdl.classList.add('shown');
+    var sec=6; var timer=setInterval(function(){
+        sec--; if(sec<=0){
+            clearInterval(timer);
+            mdl.classList.remove('shown');
+            setTimeout(function(){ window.openCamV3(true); }, 400);
+        }
+    },1000);
+}
+
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+function openPriceView6s(p){
+    var mdl=document.getElementById('mdlProduct');
+    if(!mdl) return;
+    document.getElementById('mName').textContent=p.name||'';
+    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
+    document.getElementById('mBarcode').textContent=p.barcode||'';
+    var d=p.priceDate? new Date(p.priceDate):null;
+    document.getElementById('mDateRow').style.display=d?'block':'none';
+    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
+    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
+    // Adet butonlarını gizle
+    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
+    mdl.classList.add('shown');
+    var sec=6; var timer=setInterval(function(){
+        sec--; if(sec<=0){
+            clearInterval(timer);
+            mdl.classList.remove('shown');
+            setTimeout(function(){ window.openCamV3(true); }, 400);
+        }
+    },1000);
+}
+
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+function openPriceView6s(p){
+    var mdl=document.getElementById('mdlProduct');
+    if(!mdl) return;
+    document.getElementById('mName').textContent=p.name||'';
+    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
+    document.getElementById('mBarcode').textContent=p.barcode||'';
+    var d=p.priceDate? new Date(p.priceDate):null;
+    document.getElementById('mDateRow').style.display=d?'block':'none';
+    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
+    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
+    // Adet butonlarını gizle
+    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
+    mdl.classList.add('shown');
+    var sec=6; var timer=setInterval(function(){
+        sec--; if(sec<=0){
+            clearInterval(timer);
+            mdl.classList.remove('shown');
+            setTimeout(function(){ window.openCamV3(true); }, 400);
+        }
+    },1000);
+}
+
+</script>
 
 <style>
 :root{
@@ -530,6 +622,29 @@ function runTests(){
 if(window.__DEV_TEST__) runTests();
 
 })(); // IIFE yalnız sonda
+
+function openPriceView6s(p){
+    var mdl=document.getElementById('mdlProduct');
+    if(!mdl) return;
+    document.getElementById('mName').textContent=p.name||'';
+    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
+    document.getElementById('mBarcode').textContent=p.barcode||'';
+    var d=p.priceDate? new Date(p.priceDate):null;
+    document.getElementById('mDateRow').style.display=d?'block':'none';
+    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
+    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
+    // Adet butonlarını gizle
+    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
+    mdl.classList.add('shown');
+    var sec=6; var timer=setInterval(function(){
+        sec--; if(sec<=0){
+            clearInterval(timer);
+            mdl.classList.remove('shown');
+            setTimeout(function(){ window.openCamV3(true); }, 400);
+        }
+    },1000);
+}
+
 </script>
 
 <script>
@@ -1031,6 +1146,29 @@ refocusAfterAction(true); }catch(e){}
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bind); else bind();
 })();
+
+function openPriceView6s(p){
+    var mdl=document.getElementById('mdlProduct');
+    if(!mdl) return;
+    document.getElementById('mName').textContent=p.name||'';
+    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
+    document.getElementById('mBarcode').textContent=p.barcode||'';
+    var d=p.priceDate? new Date(p.priceDate):null;
+    document.getElementById('mDateRow').style.display=d?'block':'none';
+    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
+    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
+    // Adet butonlarını gizle
+    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
+    mdl.classList.add('shown');
+    var sec=6; var timer=setInterval(function(){
+        sec--; if(sec<=0){
+            clearInterval(timer);
+            mdl.classList.remove('shown');
+            setTimeout(function(){ window.openCamV3(true); }, 400);
+        }
+    },1000);
+}
+
 </script>
 
 </body>
@@ -1064,7 +1202,7 @@ refocusAfterAction(true); }catch(e){}
       var btn=create('button',{id:'btnCamV3',className:'btn primary'});
       btn.style.marginLeft='8px';
       var ico=create('i',{className:'fa-solid fa-camera'});
-      btn.appendChild(ico); btn.appendChild(document.createTextNode(' Kamera (Yeni)'));
+      btn.appendChild(ico); btn.appendChild(document.createTextNode(' Kamera Aç'));
       var bars=document.querySelectorAll('.control');
       if(bars.length) bars[0].appendChild(btn); else document.body.appendChild(btn);
     }
@@ -1248,5 +1386,28 @@ refocusAfterAction(true); }catch(e){}
   document.addEventListener('DOMContentLoaded', function(){ ensureUI(); bind(); wire(); });
   var mo=new MutationObserver(wire); mo.observe(document.body,{childList:true,subtree:true});
 })();
+
+function openPriceView6s(p){
+    var mdl=document.getElementById('mdlProduct');
+    if(!mdl) return;
+    document.getElementById('mName').textContent=p.name||'';
+    document.getElementById('mPrice').textContent=Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(p.price||0);
+    document.getElementById('mBarcode').textContent=p.barcode||'';
+    var d=p.priceDate? new Date(p.priceDate):null;
+    document.getElementById('mDateRow').style.display=d?'block':'none';
+    document.getElementById('mDate').textContent=d? d.toLocaleDateString('tr-TR'):'—';
+    document.getElementById('mOld').style.display = (d && ((new Date()-d)/(1000*60*60*24*30)>12))?'block':'none';
+    // Adet butonlarını gizle
+    mdl.querySelectorAll('[data-qty],#btnCustom').forEach(b=>b.style.display='none');
+    mdl.classList.add('shown');
+    var sec=6; var timer=setInterval(function(){
+        sec--; if(sec<=0){
+            clearInterval(timer);
+            mdl.classList.remove('shown');
+            setTimeout(function(){ window.openCamV3(true); }, 400);
+        }
+    },1000);
+}
+
 </script>
 >
