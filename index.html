@@ -90,11 +90,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <div class="control">
         <button id="btnCart" class="btn neutral" style="font-size:16px"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
         <button id="btnPrint" class="btn success" style="font-size:16px"><i class="fa-solid fa-print"></i> Yazdır</button>
-        
-<button id="btnLoadCsv" class="btn primary">
-  <i class="fa-solid fa-cloud-arrow-down"></i> Google Sheets'ten Yükle
-</button>
-
         <button id="btnCam" class="btn primary" style="font-size:16px">
           <i class="fa-solid fa-camera"></i> Kamera Aç
         </button>
@@ -504,30 +499,24 @@ async function makeOldListDoc(){
 })(); // IIFE
 </script>
 
+<div style="text-align:center; margin: 20px 0;">
+    <button id="fetchDataBtn" style="background-color:#007bff; color:white; padding:15px 25px; font-size:20px; border:none; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:10px;">
+        <span>🔄 Güncel Veriyi Çek</span>
+    </button>
+</div>
 <script>
-$('btnLoadCsv').addEventListener('click', async () => {
-  try {
-    const proxy = "https://cors-anywhere.herokuapp.com/";
-    const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
-    
-    badgeData.innerHTML = `<i class="fa-solid fa-database"></i> Veri yükleniyor...`;
-    const res = await fetch(proxy + sheetUrl);
-    if (!res.ok) throw new Error("Veri çekilemedi: " + res.status);
-    
-    const csvText = await res.text();
-    const wb = XLSX.read(csvText, { type: 'string' });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true, cellDates: true });
-    let arr = rowsObj.map(normalizeRow).filter(x => x.barcode && x.name);
-    
-    PRODUCTS = arr;
-    badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Google Sheets)`;
-    if (PRODUCTS.length > 0) showToast('Google Sheets verisi yüklendi');
-    else alert('Uygun satır bulunamadı.');
-  } catch (err) {
-    console.error(err);
-    alert('Google Sheets verisi alınamadı: ' + err.message);
-  }
+document.getElementById('fetchDataBtn').addEventListener('click', function() {
+    fetch('https://script.google.com/macros/s/AKfycbymC0KeZ-EHPnL4et5bmFLazdvd2ZU-FgWxXcg7sfIU-MHwV1_gvgp5muzwFlwZTDhy/exec')
+        .then(response => response.text())
+        .then(data => {
+            console.log("Güncel veri başarıyla çekildi:", data);
+            alert("✅ Güncel veri çekildi!");
+            // Burada mevcut veri işleme fonksiyonunu tetikle
+        })
+        .catch(err => {
+            console.error("Veri çekme hatası:", err);
+            alert("❌ Veri çekilemedi!");
+        });
 });
 </script>
 
