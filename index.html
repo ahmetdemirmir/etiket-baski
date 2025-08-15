@@ -100,6 +100,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off">
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off">
       <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
+
 <div class="inline-flex items-center gap-2" style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
   <button id="btnFetchSheet" class="btn" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#d6dbe6);background:#0a66c2;color:white;cursor:pointer">
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -109,6 +110,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   </button>
   <span id="btnFetchSheetHint" class="hint" style="margin-left:8px;color:#64748b"></span>
 </div>
+
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; **KAMERA ile okutunca ürün popup'ı direkt açılır**.</small>
   </div>
@@ -507,56 +509,55 @@ async function makeOldListDoc(){
 
 })(); // IIFE
 </script>
+</body>
+</html
 <script>
 (() => {
-  // --- CONFIG ---
   const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
-
-  // --- HELPERS ---
   const $ = (s) => document.getElementById(s);
 
   function norm(s){
-    return (s||"").replace(/^\uFEFF/,'')           // strip BOM
+    return (s||"").replace(/^\uFEFF/,'')
       .toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-      .replace(/[._\-()/]/g,' ')                   // punctuation -> space
+      .replace(/[._\-()/\t]/g,' ')
       .replace(/\s+/g,' ').trim();
   }
 
-  function splitCSV(line, delim){                  // CSV-safe split for a single line
+  function splitCSV(line, delim){
     const out=[]; let cur=""; let q=false;
     for(let i=0;i<line.length;i++){
       const ch=line[i];
       if(ch === '"'){
         if(q && line[i+1] === '"'){ cur+='"'; i++; } else { q=!q; }
-      }else if(ch === delim && !q){
-        out.push(cur); cur="";
-      }else{
-        cur+=ch;
-      }
+      }else if(ch === delim && !q){ out.push(cur); cur=""; }
+      else{ cur+=ch; }
     }
     out.push(cur);
     return out;
   }
 
-  function pickDelimiter(sampleText){
-    // count separators on first lines
-    const c = (sampleText.match(/,/g)||[]).length;
-    const s = (sampleText.match(/;/g)||[]).length;
-    return s > c ? ';' : ',';
+  function pickDelimiter(sample){
+    const c=(sample.match(/,/g)||[]).length;
+    const s=(sample.match(/;/g)||[]).length;
+    return s>c?';':',';
   }
+
+  const BARKOD_SET = /^(barkod|ean|ean13|barkod no|barkod numarasi|barkod numarası|urun barkodu|ürün barkodu)$/;
+  const AD_SET     = /^(stok adi|urun adi|ürün adı|ad|stok|urun|ürün|stok ismi|ürün ismi)$/;
+  const FIYAT_SET  = /^(magaza|mağaza|magaza fiyati|mağaza fiyati|satis fiyati 1|satış fiyatı 1|fiyat|satis fiyati|satış fiyatı|perakende fiyati|perakende fiyat|fiyat₺|fiyat tl)$/;
+  const TARIH_SET  = /^(fiyat degisiklik tarihi|fiyat değişiklik tarihi|fiyat tarih|fdt|tarih|degisim tarihi|değişim tarihi)$/;
 
   function scoreHeaders(hs){
     const H = hs.map(norm);
-    const hasB = H.some(h=>/^(barkod|ean|ean13|barkod no|barkod numarasi|barkod numarası)$/.test(h));
-    const hasA = H.some(h=>/^(stok adi|urun adi|ürün adı|ad|stok|urun|ürün)$/.test(h));
-    const hasF = H.some(h=>/^(magaza|mağaza|magaza fiyati|mağaza fiyati|satis fiyati 1|satış fiyatı 1|fiyat|satis fiyati|satış fiyatı)$/.test(h));
-    const hasT = H.some(h=>/^(fiyat degisiklik tarihi|fiyat değişiklik tarihi|fiyat tarih|fdt|tarih)$/.test(h));
-    let score = 0; if(hasB) score+=3; if(hasA) score+=2; if(hasF) score+=3; if(hasT) score+=1;
-    return {score, hasB, hasA, hasF, hasT};
+    const hasB = H.some(h=>BARKOD_SET.test(h));
+    const hasA = H.some(h=>AD_SET.test(h));
+    const hasF = H.some(h=>FIYAT_SET.test(h));
+    const hasT = H.some(h=>TARIH_SET.test(h));
+    let score = 0; if(hasB) score+=4; if(hasA) score+=3; if(hasF) score+=3; if(hasT) score+=1;
+    return {score, hasB, hasA, hasF, hasT, normHeaders: H};
   }
 
-  // --- MAIN ---
   async function fetchCSV(){
     const btn = $('btnFetchSheet');
     const hint = $('btnFetchSheetHint');
@@ -571,33 +572,38 @@ async function makeOldListDoc(){
       if(!resp.ok) throw new Error("HTTP "+resp.status);
       const text = await resp.text();
 
-      const linesAll = text.split(/\r?\n/);
-      const lines = linesAll.filter(l=>l.trim().length>0).slice(0,5);
-      const delim = pickDelimiter(lines.join('\n'));
+      const allLines = text.split(/\r?\n/);
+      const firstNonEmpty = allLines.filter(l=>l.trim()).slice(0,10);
+      const delim = pickDelimiter(firstNonEmpty.join('\n'));
 
-      // find best header row among first 5 non-empty lines
       let best = {score:-1, idx:0, hs:[], meta:null};
-      for(let i=0;i<lines.length;i++){
-        const hs = splitCSV(lines[i], delim);
+      for(let i=0;i<firstNonEmpty.length;i++){
+        const hs = splitCSV(firstNonEmpty[i], delim);
         const sc = scoreHeaders(hs);
         if(sc.score > best.score) best = {score: sc.score, idx:i, hs, meta:sc};
       }
 
+      // REQUIRE: Barkod + Ad + (en az 1 fiyat kolonu). Tarih varsa bonus, zorunlu değil.
       if(!(best.meta && best.meta.hasB && best.meta.hasA && best.meta.hasF)){
-        hint.textContent = "Başlıklar uyumsuz (Barkod / Ad / Mağaza zorunlu).";
-        throw new Error("Required headers missing.");
+        const dbg = (best.meta && best.meta.normHeaders) ? "Bulunan başlıklar: " + best.meta.normHeaders.join(' | ') : "";
+        hint.textContent = "Başlıklar uyumsuz (Barkod + Ad + Fiyat gerekir).";
+        throw new Error("Required headers missing. " + dbg);
       }
 
-      // If header row isn't the first line, move it to top
       let finalText = text;
       if(best.idx !== 0){
-        const rows = linesAll.slice();               // clone
-        const header = rows.splice(rows.findIndex(r => r.trim() === lines[best.idx].trim()), 1)[0];
+        // Move detected header row to top
+        const headerLine = firstNonEmpty[best.idx];
+        const rows = allLines.slice();
+        // locate exact line index in original array
+        let headerIdx = rows.findIndex(r => norm(r) === norm(headerLine));
+        if(headerIdx === -1) headerIdx = rows.findIndex(r => r.trim() === headerLine.trim());
+        if(headerIdx === -1) headerIdx = 0;
+        const header = rows.splice(headerIdx,1)[0];
         rows.unshift(header);
         finalText = rows.join('\n');
       }
 
-      // Wrap with BOM and inject to file input -> trigger existing change handler
       const bom = new Uint8Array([0xEF,0xBB,0xBF]);
       const blob = new Blob([bom, finalText], {type: "text/csv"});
       const file = new File([blob], "guncel.csv", {type: "text/csv", lastModified: Date.now()});
@@ -619,14 +625,11 @@ async function makeOldListDoc(){
   }
 
   function wire(){
-    const btn = $('btnFetchSheet');
-    if(btn) btn.addEventListener('click', fetchCSV);
-    // Kamera butonu mevcut kodda 'btnCam' ile bağlı; buraya dokunmuyoruz.
+    const b = $('btnFetchSheet');
+    if(b) b.addEventListener('click', fetchCSV);
   }
-
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
   else wire();
 })();
 </script>
-</body>
-</html>
+>
