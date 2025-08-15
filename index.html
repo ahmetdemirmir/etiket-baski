@@ -667,6 +667,17 @@ if(window.__DEV_TEST__) runTests();
   var resumeAfter=false, resumeDebounce=null;
   var lastCode=null, lastHit=0;
   var sheet=null, video=null;
+  function freshVideo(){
+    try{
+      var mount=document.getElementById('camMount');
+      if(!mount){ return; }
+      var old=document.getElementById('camVideo');
+      var nv=document.createElement('video');
+      nv.id='camVideo'; nv.autoplay=true; nv.playsInline=true; nv.muted=true;
+      if(old && old.parentNode){ old.parentNode.replaceChild(nv, old); } else { mount.appendChild(nv); }
+      video = nv;
+    }catch(e){}
+  }
   var quaggaLoaded=false, quaggaRunning=false, quaggaLoading=false;
 
   function $(id){ return document.getElementById(id); }
@@ -771,10 +782,11 @@ if(window.__DEV_TEST__) runTests();
     setBtnBusy(true);
     try{ window.__priceViewMode = !!window.__priceViewMode; }catch(e){}
     injectSheet();
+    freshVideo();
     sheet.style.display='block';
-    startCamera();
+    setTimeout(startCamera, 160);
   };
-  window.closeCam = function(){ stopCamera().then(function(){ resetNoDetTimer(); starting=false; setBtnBusy(false); sheet.style.display='none'; }); };
+  window.closeCam = function(){ stopCamera().then(function(){ try{ var m=document.getElementById('camMount'); if(m) m.innerHTML=''; }catch(e){} resetNoDetTimer(); starting=false; setBtnBusy(false); sheet.style.display='none'; }); };
 
   async function startCamera(){
     if(starting || scanning || quaggaRunning) return;
@@ -792,6 +804,7 @@ if(window.__DEV_TEST__) runTests();
       return;
     }
     try{
+      freshVideo();
       const supported = await BarcodeDetector.getSupportedFormats();
       const wanted = ['ean-13','ean-8','upc-a','upc-e','code-128','code-39','itf','codabar'];
       const fmts = supported.filter(f => wanted.includes(f));
@@ -831,8 +844,9 @@ if(window.__DEV_TEST__) runTests();
       try{ rafId && cancelAnimationFrame(rafId); }catch(e){}
       try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); } }catch(e){}
       try{ stopQuagga(); }catch(e){}
+      try{ var m=document.getElementById('camMount'); if(m) m.innerHTML=''; }catch(e){}
       try{ if(video){ video.srcObject=null; } }catch(e){}
-      resolve();
+      setTimeout(resolve, 150);
     });
   }
 
@@ -879,7 +893,7 @@ if(window.__DEV_TEST__) runTests();
       if(!resumeAfter) return;
       if(countOpenModals()===0){
         resumeAfter=false;
-        window.openCam();
+        setTimeout(function(){ window.openCam(); }, 400);
       }
     }, 300);
   }
