@@ -613,13 +613,13 @@ async function fetchCloudCSVOnly(){
     // Integrate with existing app
     if(typeof PRODUCTS !== 'undefined'){
       PRODUCTS = products;
-      if(typeof badgeData !== 'undefined'){
-        badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Bulut/CSV)`;
-      }
+      const bd = document.getElementById('badgeData');
+      if(bd){ bd.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Bulut/CSV)`; }
       if(typeof showToast === 'function') showToast('Güncel veri çekildi (CSV)');
       if(typeof refocusAfterAction === 'function') refocusAfterAction(true);
     }else{
-      // fallback: show count
+      const bd = document.getElementById('badgeData');
+      if(bd){ bd.innerHTML = `<i class="fa-solid fa-database"></i> ${products.length} ürün yüklendi (Bulut/CSV)`; }
       alert('Yüklendi: ' + products.length + ' ürün (Bulut/CSV)');
     }
   }catch(e){
