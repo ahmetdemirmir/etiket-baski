@@ -83,7 +83,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .pdfFrame{flex:1;border:1px solid var(--line);border-radius:8px}
 </style>
 
-<!-- Mobil barkod: html5-qrcode -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 </head>
 <body>
@@ -514,7 +513,6 @@ if(window.__DEV_TEST__) runTests();
 </script>
 </body>
 </html
-<!-- Kamera Modal -->
 <div id="mdlCam" style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:9998">
   <div class="box" style="width:min(96vw,640px);max-height:90vh;overflow:auto;padding:10px 10px 14px;background:#fff;border-radius:12px;margin:5vh auto">
     <h3 style="margin:6px 10px 6px">Barkod Tara</h3>
@@ -524,100 +522,45 @@ if(window.__DEV_TEST__) runTests();
       <button id="btnCamClose" class="btn danger">Kapat</button>
     </div>
     <div id="reader" style="width:100%;border:1px solid #d6dbe6;border-radius:12px;overflow:hidden"></div>
-    <small class="hint" style="display:block;margin:8px 2px 0;color:#64748b">
-      İpucu: Ürüne 15–25 cm yaklaşın. Işık yetersizse telefon flaşını açın.
-    </small>
   </div>
 </div>
 
 <script>
 (function(){
   function $(id){ return document.getElementById(id); }
-  function injectBtn(){
-    if(!document.getElementById('btnCam')){
-      var btn=document.createElement('button');
-      btn.id='btnCam'; btn.className='btn primary'; btn.style.marginLeft='8px';
-      btn.innerHTML='<i class="fa-solid fa-camera"></i> Kamera';
-      var controls=document.querySelectorAll('.control');
-      if(controls.length) controls[0].appendChild(btn); else document.body.appendChild(btn);
-    }
-  }
-  function show(id){ var e=$(id); if(e) e.style.display='block'; }
-  function hide(id){ var e=$(id); if(e) e.style.display='none'; }
+  function addBtn(){ if(!document.getElementById('btnCam')){ var b=document.createElement('button'); b.id='btnCam'; b.className='btn primary'; b.style.marginLeft='8px'; b.innerHTML='<i class="fa-solid fa-camera"></i> Kamera'; var bars=document.querySelectorAll('.control'); if(bars.length) bars[0].appendChild(b); else document.body.appendChild(b);} }
   var cam=null, paused=false, lastCode='', lastTs=0;
-  function validEAN13(code){
-    if(!/^\d{13}$/.test(code)) return false;
-    var s=code.split('').map(Number), sum=0;
-    for(var i=0;i<12;i++) sum += s[i]*(i%2?3:1);
-    return ((10-(sum%10))%10)===s[12];
-  }
-  function beepSafe(ok){
-    try{ if(typeof beep==='function') beep(ok); else if(navigator.vibrate) navigator.vibrate(ok?[35]:[15,30,15]); }catch(e){}
-  }
-  async function start(deviceId){
+  function validEAN13(c){ if(!/^\d{13}$/.test(c)) return false; var s=c.split('').map(Number), sum=0; for(var i=0;i<12;i++) sum+=s[i]*(i%2?3:1); return ((10-(sum%10))%10)===s[12]; }
+  function beepSafe(ok){ try{ if(typeof beep==='function') beep(ok); else if(navigator.vibrate) navigator.vibrate(ok?[35]:[15,30,15]); }catch(e){} }
+  async function start(id){
     if(cam){ try{ await cam.stop(); }catch(e){} }
     cam=new Html5Qrcode('reader',{verbose:false});
-    var fps=18, qrbox={width:320,height:200};
-    await cam.start({deviceId:{exact:deviceId}}, {fps:fps,qrbox:qrbox,aspectRatio:1.777,rememberLastUsedCamera:true,
-      formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128]},
-      onScan, function(){});
-    paused=false; var p=$('btnCamPause'); if(p) p.textContent='Durdur';
+    await cam.start({deviceId:{exact:id}}, {fps:18, qrbox:{width:320,height:200}, aspectRatio:1.777, rememberLastUsedCamera:true, formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128]}, onScan, function(){});
+    paused=false; $('btnCamPause').textContent='Durdur';
   }
   function onScan(txt){
-    var now=Date.now();
-    var code=String(txt||'').replace(/\D/g,'');
-    if(!code) return;
-    if(code===lastCode && (now-lastTs)<1200) return;
-    lastCode=code; lastTs=now;
+    var now=Date.now(); var code=String(txt||'').replace(/\D/g,'');
+    if(!code) return; if(code===lastCode && (now-lastTs)<1200) return; lastCode=code; lastTs=now;
     if(/^\d{13}$/.test(code) && !validEAN13(code)){ beepSafe(false); return; }
-    var inp=document.getElementById('inpBarcode');
-    if(inp){ inp.value=code.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); }
+    var inp=document.getElementById('inpBarcode'); if(inp){ inp.value=code.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); }
     beepSafe(true);
-    try{
-      if(window.PRODUCTS && Array.isArray(PRODUCTS)){
-        var m=PRODUCTS.find(function(p){ return String(p.barcode||'').replace(/\D/g,'')===code; });
-        if(m && typeof openProduct==='function'){
-          var ms=document.getElementById('mdlSearch'); if(ms) ms.classList.remove('shown');
-          openProduct(m);
-        }
-      }
-    }catch(e){}
   }
-  async function openModal(){
-    show('mdlCam');
+  async function openM(){
+    document.getElementById('mdlCam').style.display='block';
     try{
-      var devs=await Html5Qrcode.getCameras();
-      var sel=$('camSelect'); sel.innerHTML='';
-      devs.forEach(function(d,i){
-        var o=document.createElement('option'); o.value=d.id; o.textContent=d.label||('Kamera '+(i+1)); sel.appendChild(o);
-      });
-      var back=devs.find(function(d){ return /back|arka|environment|rear/i.test(d.label||''); });
-      if(back) sel.value=back.id;
-      await start(sel.value);
-      sel.onchange=async function(){ await start(sel.value); };
-    }catch(e){
-      alert('Kamera listesi alınamadı. Kamera izni verin.');
-    }
+      var devs=await Html5Qrcode.getCameras(); var sel=$('camSelect'); sel.innerHTML='';
+      devs.forEach(function(d,i){ var o=document.createElement('option'); o.value=d.id; o.textContent=d.label||('Kamera '+(i+1)); sel.appendChild(o); });
+      var back=devs.find(function(d){ return /back|arka|environment|rear/i.test(d.label||''); }); if(back) sel.value=back.id;
+      await start(sel.value); sel.onchange=async function(){ await start(sel.value); };
+    }catch(e){ alert('Kamera listesi alınamadı.'); }
   }
-  async function stopCamera(){ if(cam){ try{ await cam.stop(); }catch(e){} } cam=null; }
+  async function stopAll(){ try{ if(cam) await cam.stop(); }catch(e){} cam=null; document.getElementById('mdlCam').style.display='none'; }
   function wire(){
-    var b=document.getElementById('btnCam');
-    if(b && !b.__wired){ b.__wired=true; b.addEventListener('click', async function(){
-      try{ if(!window.Html5Qrcode){ /* defer script may not be ready yet */ await new Promise(r=>setTimeout(r,200)); }
-        await openModal();
-      }catch(e){ alert('Kamera modülü hazır değil: '+e.message); }
-    }); }
-    var bc=document.getElementById('btnCamClose');
-    if(bc && !bc.__wired){ bc.__wired=true; bc.addEventListener('click', async function(){ await stopCamera(); hide('mdlCam'); }); }
-    var bp=document.getElementById('btnCamPause');
-    if(bp && !bp.__wired){ bp.__wired=true; bp.addEventListener('click', async function(e){
-      if(!cam) return;
-      if(!paused){ try{ await cam.pause(true); }catch(_e){} paused=true; e.target.textContent='Devam Et'; }
-      else{ try{ await cam.resume(); }catch(_e){} paused=false; e.target.textContent='Durdur'; }
-    }); }
-    window.addEventListener('pagehide', stopCamera);
+    var b=document.getElementById('btnCam'); if(b && !b.__wired){ b.__wired=true; b.addEventListener('click', openM); }
+    var bc=document.getElementById('btnCamClose'); if(bc && !bc.__wired){ bc.__wired=true; bc.addEventListener('click', stopAll); }
+    var bp=document.getElementById('btnCamPause'); if(bp && !bp.__wired){ bp.__wired=true; bp.addEventListener('click', async function(e){ if(!cam) return; if(!paused){ try{ await cam.pause(true); }catch(_e){} paused=true; e.target.textContent='Devam Et'; } else { try{ await cam.resume(); }catch(_e){} paused=false; e.target.textContent='Durdur'; } }); }
   }
-  document.addEventListener('DOMContentLoaded', function(){ injectBtn(); wire(); });
+  document.addEventListener('DOMContentLoaded', function(){ addBtn(); wire(); });
   var mo=new MutationObserver(wire); mo.observe(document.body,{childList:true,subtree:true});
 })();
 </script>
