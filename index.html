@@ -515,8 +515,11 @@ $('btnLoadCsv').addEventListener('click', async () => {
     let arr = rowsObj.map(normalizeRow).filter(x => x.barcode && x.name);
     PRODUCTS = arr;
     badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Google Sheets)`;
-    if (PRODUCTS.length > 0) showToast('Google Sheets verisi yüklendi');
-    else alert('Uygun satır bulunamadı.');
+    if (PRODUCTS.length > 0) {
+      showToast('Google Sheets verisi yüklendi');
+    } else {
+      alert('Uygun satır bulunamadı.');
+    }
   } catch (err) {
     console.error(err);
     alert('Google Sheets verisi alınamadı');
