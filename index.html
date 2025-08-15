@@ -587,13 +587,14 @@ if(window.__DEV_TEST__) runTests();
 <script>
 // cam.js — Clean camera integration using BarcodeDetector (no external libs)
 (function(){
-  var stream=null, scanning=false, rafId=null;
+  var stream=null, scanning=false, starting=false, rafId=null;
   var resumeAfter=false, resumeDebounce=null;
   var lastCode=null, lastHit=0;
   var sheet=null, mount=null, video=null;
 
   function $(id){ return document.getElementById(id); }
 
+  function setBtnBusy(b){ try{ var cam=document.getElementById('btnCam'); if(cam) cam.disabled=b; var pv=document.getElementById('btnPriceView'); if(pv) pv.disabled=b; }catch(e){} }
   function injectSheet(){
     if(sheet) return;
     sheet = document.createElement('div');
@@ -623,17 +624,22 @@ if(window.__DEV_TEST__) runTests();
   }
 
   window.openCam = function(){
+    if(starting || scanning) return; // single-flight guard
+    setBtnBusy(true);
     try{ window.__priceViewMode = !!window.__priceViewMode; }catch(e){}
     injectSheet();
     sheet.style.display='block';
     startCamera();
   };
-  window.closeCam = function(){ stopCamera().then(function(){ sheet.style.display='none'; }); };
+  window.closeCam = function(){ stopCamera().then(function(){ starting=false; setBtnBusy(false); sheet.style.display='none'; }); };
 
-  async function startCamera(){
-    if(scanning) return;
+  
+async function startCamera(){
+    if(starting || scanning) return;
+    starting = true;
     if(!('BarcodeDetector' in window)){
       alert('Tarayıcı bu cihazda BarcodeDetector desteklemiyor. En güncel Chrome / Edge deneyin.');
+      starting = false; setBtnBusy(false);
       return;
     }
     try{
@@ -641,8 +647,25 @@ if(window.__DEV_TEST__) runTests();
       const detector = new BarcodeDetector({ formats: formats.includes('ean_13') ? ['ean_13','ean_8','code_128'] : ['code_128','ean_8'] });
       stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode: { ideal:'environment' }, width:{ideal:1280}, height:{ideal:720} }, audio:false });
       video.srcObject = stream;
-      await video.play();
+      await new Promise(res => {
+        try{
+          if (video.readyState >= 2) res();
+          else video.onloadedmetadata = () => res();
+        }catch(_){ res(); }
+      });
+      try{
+        await video.play();
+      }catch(err){
+        if(err && err.name === 'AbortError'){
+          await new Promise(r => setTimeout(r, 80));
+          await video.play();
+        }else{
+          throw err;
+        }
+      }
       scanning = true;
+      starting = false;
+      setBtnBusy(false);
       const tick = async ()=>{
         if(!scanning) return;
         try{
@@ -657,13 +680,15 @@ if(window.__DEV_TEST__) runTests();
       };
       rafId = requestAnimationFrame(tick);
     }catch(e){
+      starting = false; setBtnBusy(false);
       alert('Kamera başlatma hatası: ' + e);
     }
   }
 
+
   function stopCamera(){
     return new Promise(function(resolve){
-      scanning=false;
+      scanning=false; starting=false;
       try{ rafId && cancelAnimationFrame(rafId); }catch(e){}
       try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); } }catch(e){}
       try{ video && (video.srcObject=null); }catch(e){}
