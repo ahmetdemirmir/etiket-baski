@@ -621,7 +621,11 @@ if(window.__DEV_TEST__) runTests();
       var out=document.getElementById('mDate'); if(out) out.textContent = d? d.toLocaleDateString('tr-TR') : '—';
       var warn=document.getElementById('mOld'); if(warn) try{ warn.style.display = isOld(p)?'block':'none'; }catch(e){}
 
-      try { mdl.querySelectorAll('[data-qty], #btnCustom').forEach(function(el){ el.style.display='none'; }); } catch(e){}
+      try {
+        var sel = ['[data-qty]','#btnCustom','.qty','[data-role="qty"]','[id^="btnQ"]','.btn-adet'];
+        mdl.querySelectorAll(sel.join(',')).forEach(function(el){ el.style.display='none'; });
+        Array.prototype.slice.call(mdl.querySelectorAll('button, .btn')).forEach(function(b){ if(/adet/i.test((b.textContent||''))){ b.style.display='none'; }});
+      } catch(e){}
 
       clearPV();
       var box = mdl.querySelector('.box') || mdl;
@@ -664,6 +668,7 @@ if(window.__DEV_TEST__) runTests();
 /* ==== 2) Kamera (BD + otomatik Quagga fallback + 7sn "okunamadı" uyarısı) ==== */
 (function(){
   var stream=null, scanning=false, starting=false, rafId=null, noDetTimer=null, bdNoDetTimer=null;
+  var engine=null, bdDetector=null, quaggaInited=false;
   var resumeAfter=false, resumeDebounce=null;
   var lastCode=null, lastHit=0;
   var sheet=null, video=null;
@@ -699,6 +704,62 @@ if(window.__DEV_TEST__) runTests();
     }, 7000);
   }
   function clearBdTimer(){ try{ if(bdNoDetTimer){ clearTimeout(bdNoDetTimer); bdNoDetTimer=null; } }catch(e){} }
+
+  function pauseDetection(disableTrack){
+    try{ scanning=false; }catch(e){}
+    try{ rafId && cancelAnimationFrame(rafId); }catch(e){}
+    try{ if(engine==='quagga' && window.Quagga){ Quagga.offDetected && Quagga.offDetected(); Quagga.stop(); quaggaRunning=false; quaggaInited=true; } }catch(e){}
+    try{
+      if(disableTrack && stream){
+        var t = stream.getVideoTracks && stream.getVideoTracks()[0];
+        if(t) t.enabled = false;
+      }
+    }catch(e){}
+  }
+  async function resumeCam(){
+    try{
+      if(sheet) sheet.style.display='block';
+      if(stream){
+        var t = stream.getVideoTracks && stream.getVideoTracks()[0];
+        if(t && t.readyState==='live'){ t.enabled = true; }
+      }
+      // restart detection without re-getUserMedia if possible
+      if(engine==='quagga'){
+        try{
+          await startQuagga(true); // start only detection if already inited
+        }catch(e){ await startQuagga(); }
+        armNoDetTimer();
+      }else{
+        // BD path
+        if(!bdDetector){
+          try{
+            const supported = await BarcodeDetector.getSupportedFormats();
+            const wanted = ['ean-13','ean-8','upc-a','upc-e','code-128','code-39','itf','codabar'];
+            const fmts = supported.filter(f => wanted.includes(f));
+            bdDetector = fmts.length ? new BarcodeDetector({ formats: fmts }) : new BarcodeDetector();
+          }catch(e){ /* ignore */ }
+        }
+        scanning = true;
+        const tick = async ()=>{
+          if(!scanning) return;
+          try{
+            const codes = await bdDetector.detect(video);
+            if(codes && codes.length){
+              clearBdTimer();
+              let raw = (codes[0].rawValue ?? codes[0].value ?? '').toString();
+              let m = raw.match(/\d{8,}/g); const code = m ? m.sort((a,b)=>b.length-a.length)[0] : raw;
+              onDetected(code);
+              return;
+            }
+          }catch(e){}
+          rafId = requestAnimationFrame(tick);
+        };
+        rafId = requestAnimationFrame(tick);
+        armNoDetTimer();
+      }
+    }catch(e){ window.openCam(); }
+  }
+
 
   function injectSheet(){
     if(sheet) return;
@@ -741,7 +802,7 @@ if(window.__DEV_TEST__) runTests();
       document.head.appendChild(s);
     });
   }
-  function startQuagga(){
+  function startQuagga(resumeOnly){
     return new Promise(async function(resolve, reject){
       try{
         await loadQuagga();
@@ -757,6 +818,7 @@ if(window.__DEV_TEST__) runTests();
           decoder:{ readers:['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader','code_39_reader'] },
           locate:true
         };
+        if(resumeOnly && window.Quagga){ try{ Quagga.start(); quaggaRunning=true; return resolve(); }catch(_e){} }
         Quagga.init(cfg, function(err){
           if(err){ alert('Quagga init hatası: '+err); return reject(err); }
           Quagga.start(); quaggaRunning=true;
@@ -791,7 +853,7 @@ if(window.__DEV_TEST__) runTests();
   async function startCamera(){
     if(starting || scanning || quaggaRunning) return;
     starting = true;
-    var canBD = 'BarcodeDetector' in window;
+    var canBD = 'BarcodeDetector' in window; if(engine){ canBD = engine==='bd'; }
     var supportsEAN = false;
     if(canBD){
       try{
@@ -800,6 +862,7 @@ if(window.__DEV_TEST__) runTests();
       }catch(e){ canBD=false; }
     }
     if(!canBD || !supportsEAN){
+      engine='quagga';
       try{ await startQuagga(); starting=false; setBtnBusy(false); armNoDetTimer(); }catch(e){ starting=false; setBtnBusy(false); alert('Kamera başlatma hatası (fallback): '+e); }
       return;
     }
@@ -807,15 +870,17 @@ if(window.__DEV_TEST__) runTests();
       freshVideo();
       const supported = await BarcodeDetector.getSupportedFormats();
       const wanted = ['ean-13','ean-8','upc-a','upc-e','code-128','code-39','itf','codabar'];
+      engine='bd';
       const fmts = supported.filter(f => wanted.includes(f));
-      const detector = fmts.length ? new BarcodeDetector({ formats: fmts }) : new BarcodeDetector();
+      bdDetector = fmts.length ? new BarcodeDetector({ formats: fmts }) : new BarcodeDetector();
+      const detector = bdDetector;
       stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} }, audio:false });
       video.srcObject = stream;
       await new Promise(res => { try{ if(video.readyState>=2) res(); else video.onloadedmetadata=()=>res(); }catch(_){ res(); } });
       try{ await video.play(); }catch(err){ if(err && err.name==='AbortError'){ await new Promise(r=>setTimeout(r,80)); await video.play(); } else { throw err; } }
       scanning = true; starting = false; setBtnBusy(false); armNoDetTimer();
       // BD'de 2.5s içinde okuma yoksa Quagga'ya düş
-      clearBdTimer(); bdNoDetTimer = setTimeout(async function(){ if(scanning){ try{ scanning=false; await stopCamera(); }catch(e){}; try{ await startQuagga(); starting=false; setBtnBusy(false); armNoDetTimer(); }catch(e){ alert('Fallback Quagga açılamadı: '+e); } } }, 2500);
+      clearBdTimer(); bdNoDetTimer = setTimeout(async function(){ if(scanning && engine==='bd'){ try{ scanning=false; await stopCamera(); }catch(e){}; try{ engine='quagga'; await startQuagga(); starting=false; setBtnBusy(false); armNoDetTimer(); }catch(e){ alert('Fallback Quagga açılamadı: '+e); } } }, 2500);
       const tick = async ()=>{
         if(!scanning) return;
         try{
@@ -893,7 +958,7 @@ if(window.__DEV_TEST__) runTests();
       if(!resumeAfter) return;
       if(countOpenModals()===0){
         resumeAfter=false;
-        setTimeout(function(){ window.openCam(); }, 400);
+        setTimeout(function(){ resumeCam(); }, 400);
       }
     }, 300);
   }
@@ -911,9 +976,9 @@ if(window.__DEV_TEST__) runTests();
     lastCode=code; lastHit=now;
     if(code.length===13 && !isValidEAN13(code)) return;
 
-    stopCamera().then(function(){
-      resetNoDetTimer();
-      window.closeCam();
+    pauseDetection(true);
+    resetNoDetTimer();
+    try{ window.closeCam(); }catch(e){}
       resumeAfter=true; tryResume();
       // normalize products if not yet
       try{ if(Array.isArray(window.PRODUCTS) && !window.__productsNormalized) window.normalizeProductsInPlace(); }catch(e){}
