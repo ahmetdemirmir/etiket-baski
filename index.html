@@ -75,6 +75,34 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 </style>
 </head>
 <body>
+
+<div style="margin: 15px 0; text-align: center;">
+  <button id="fetchSheetsData" style="background-color: #007bff; color: white; padding: 12px 20px; font-size: 18px; border: none; border-radius: 8px; cursor: pointer;">
+    <i class="fas fa-sync-alt"></i> Güncel Veriyi Çek
+  </button>
+</div>
+<script>
+document.getElementById("fetchSheetsData").addEventListener("click", function() {
+    fetch("https://script.google.com/macros/s/AKfycbymC0KeZ-EHPnL4et5bmFLazdvd2ZU-FgWxXcg7sfIU-MHwV1_gvgp5muzwFlwZTDhy/exec")
+        .then(res => res.text())
+        .then(csvText => {
+            let wb = XLSX.read(csvText, { type: "string" });
+            let firstSheet = wb.Sheets[wb.SheetNames[0]];
+            let jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+            if (typeof loadExcelData === "function") {
+                loadExcelData(jsonData);
+                alert("✅ Güncel veri çekildi ve yüklendi.");
+            } else {
+                console.error("loadExcelData fonksiyonu bulunamadı.");
+            }
+        })
+        .catch(err => {
+            console.error("Veri çekme hatası:", err);
+            alert("❌ Veri çekilemedi, konsolu kontrol edin.");
+        });
+});
+</script>
+
 <header>
   <img src="logo.png" alt="Logo">
   <h1>Fiyat Gör Etiket Bas</h1>
