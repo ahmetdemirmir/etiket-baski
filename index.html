@@ -93,8 +93,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
         <button id="btnCam" class="btn primary" style="font-size:16px">
           <i class="fa-solid fa-camera"></i> Kamera Aç
         </button>
-      
-        <button id="btnCloud" class="btn primary" style="font-size:16px"><i class="fa-solid fa-cloud-arrow-down"></i> Güncel veriyi çek</button></div>
+      </div>
     </div>
 
     <div class="control" style="margin-top:8px">
@@ -201,291 +200,12 @@ const refocusAfterAction=(clear=false)=>{ if(IS_DESKTOP){ if(clear){ inpBarcode.
 
 /* normalizasyon yardımcıları */
 const fromSci=(str)=>{const m=String(str).toLowerCase().match(/^(\d+(?:\.\d+)?)e\+(\d+)$/);if(!m) return String(str);const d=m[1].replace('.','');const dec=(m[1].split('.')[1]||'').length;const exp=+m[2];return d+'0'.repeat(Math.max(0,exp-dec));};
-function parseBarcode(v){
-  if(v==null) return '';
-  let s = String(v).trim();
-  s = s.replace(',', '.'); // normalize decimal comma
-  if(/e\+\d+$/i.test(s)){
-    try {
-      const parts = s.toLowerCase().split('e+');
-      const base = parts[0].replace('.','');
-      const pow = parseInt(parts[1]||'0',10);
-      const decimals = (parts[0].split('.')[1]||'').length;
-      const zeros = Math.max(pow - decimals, 0);
-      s = base + '0'.repeat(zeros);
-    } catch(_){}
-  }
-  s = s.replace(/[^\d]/g,'');
-  return s;
-} catch(_){}
-  }
-  s = s.replace(/[^\d]/g,'');
-  if(s.length>=8 && s.length<=20) return s;
-  return s;
-}
-function parsePrice(v){
-  if(v==null || v==='') return null;
-  let s = String(v).toLowerCase();
-  s = s.replace(/tl|try|₺|\s/g,'');
-  if(s.includes('.') && s.includes(',')){
-    s = s.replace(/\./g,'').replace(',', '.');
-  } else if(s.includes(',')){
-    s = s.replace(',', '.');
-  }
-  s = s.replace(/(\d)\.(?=\d{3}(\D|$))/g, '$1');
-  const num = parseFloat(s);
-  return isNaN(num) ? null : num;
-}
-function parseExcelDate(v){
-  if(!v && v!==0) return null;
-  if(v instanceof Date) return v.toISOString().slice(0,10);
-  let s = String(v).trim();
-  if(/^\d{3,5}$/.test(s)){
-    const serial = parseInt(s,10);
-    const epoch = new Date(Date.UTC(1899,11,30));
-    const ms = serial * 86400000;
-    const d = new Date(epoch.getTime()+ms);
-    return d.toISOString().slice(0,10);
-  }
-  if(/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)){
-    const d = new Date(s);
-    if(!isNaN(d)) return d.toISOString().slice(0,10);
-  }
-  let m = s.match(/^(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})$/);
-  if(m){
-    const dd=parseInt(m[1],10), mm=parseInt(m[2],10), yyyy=parseInt(m[3],10);
-    const d = new Date(Date.UTC(yyyy,mm-1,dd));
-    return d.toISOString().slice(0,10);
-  }
-  m = s.match(/^(\d{1,2})\-(\d{1,2})\-(\d{4})$/);
-  if(m){
-    const mm=parseInt(m[1],10), dd=parseInt(m[2],10), yyyy=parseInt(m[3],10);
-    const d = new Date(Date.UTC(yyyy,mm-1,dd));
-    return d.toISOString().slice(0,10);
-  }
-  return s || null;
-}
-function mapRowByKeys(r){
-  const out = {};
-  if(r && typeof r==='object' && !Array.isArray(r)){
-    for(const k of Object.keys(r)){
-      out[normalizeKey(k)] = r[k];
-    }
-  }
-  const K = (arr)=>arr.map(normalizeKey);
-  const BAR = K(['barkod','barkod no','barkod numarasi','barcode','ean','ean13','urun barkodu','ürün barkodu','brkd']);
-  const NAME= K(['stok adi','urun adi','ürün adı','ad','isim','aciklama','açıklama','malzeme adi']);
-  const PRICE=K(['magaza','mağaza','fiyat','satis fiyati','satış fiyatı','sf1','sf 1','fiyat1','fiyat 1','satis fiyati 1','satış fiyatı 1']);
-  const DATE =K(['fiyat degisiklik tarihi','fiyat değişiklik tarihi','fd','fdt','degisiklik tarihi','değişiklik tarihi','fiyat tarih','fiyat guncelleme tarihi','fiyat güncelleme tarihi','satis fiyati 1 deg tar','satış fiyatı 1 değ tar','satış fiyatı 1 değ. tar.','satış fiyatı 1 değ. tar','satis fiyati 1 deg tar.','satis fiyati 1 degisiklik tar','satış fiyatı 1 değişiklik tar','satis fiyati 1 degisiklik tarihi','satış fiyatı 1 değiş. tar.']);
-  function pick(dict, candidates){
-    for(const k of candidates){
-      if(k in dict && dict[k]!=='' && dict[k]!=null) return dict[k];
-      const hit = Object.keys(dict).find(x=>x.includes(k));
-      if(hit) return dict[hit];
-    }
-    return null;
-  }
-  return {
-    barcode: pick(out,BAR),
-    name:    pick(out,NAME),
-    price:   pick(out,PRICE),
-    date:    pick(out,DATE)
-  };
-}
+function parseBarcode(v){ if(v===undefined||v===null)return''; if(typeof v==='number'){const s=String(v);return s.includes('e+')?fromSci(s).replace(/\D/g,''):s.replace(/\D/g,'');} const s=String(v).trim(); if(/e\+\d+$/i.test(s)) return fromSci(s).replace(/\D/g,''); return s.replace(/[^0-9]/g,''); }
+function parsePrice(v){ if(v===undefined||v===null||v==='')return 0; if(typeof v==='number')return v; const s=String(v).replace(/[₺\s]/g,'').replace(/\./g,'').replace(',','.'); const n=parseFloat(s); return Number.isNaN(n)?0:n; }
+function parseExcelDate(v){ if(!v&&v!==0)return null; if(v instanceof Date&&!isNaN(v))return v; if(typeof v==='number'){const epoch=new Date(1899,11,30);return new Date(epoch.getTime()+v*86400000);} const str=String(v).trim(); const m=str.match(/(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/); if(m){const d=new Date(+m[3],+m[2]-1,+m[1],m[4]||0,m[5]||0,m[6]||0); if(!isNaN(d))return d;} if(/^\d{8}$/.test(str)){const y=str.slice(0,4),mo=str.slice(4,6),da=str.slice(6,8); const d=new Date(+y,+mo-1,+da); if(!isNaN(d))return d;} const d=new Date(str); return isNaN(d)?null:d; }
+function mapRowByKeys(row){ const nk={};Object.keys(row).forEach(k=>nk[normKey(k)]=k); const pick=(syns)=>{for(const s of syns){for(const k in nk){if(k===s||k.includes(s))return row[nk[k]];}} return undefined;}; const barcode=pick(['barkod','barkodno','barkodu','ean','ean13']); const name=pick(['stokadi','urunadi','adi','ad','stok','aciklama']); const price=pick(['magaza','magazasatis','magazasatisfiyati','magazafiyati','satisfiyati1','satisfiyat1','sf1','fiyat','perakendesatis']); const date=pick(['satisfiyati1degtar','satisfiyati1degtarihi','fiyatdegisikliktarihi','fiyatdegtarihi','fdtarihi','degisiktarihi','degistarihi','fiyatguncellemetarihi']); return {barcode,name,price,date}; }
+function normKey(s){return String(s||'').toLowerCase().replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');}
 function normalizeRow(r){ const m=mapRowByKeys(r); return { barcode:parseBarcode(m.barcode), name:String(m.name||'').trim(), price:parsePrice(m.price), priceDate:parseExcelDate(m.date) }; }
-/* ===== CLOUD FETCH (Google Apps Script) ===== */
-const CLOUD_URL = "https://script.google.com/macros/s/AKfycbymC0KeZ-EHPnL4et5bmFLazdvd2ZU-FgWxXcg7sfIU-MHwV1_gvgp5muzwFlwZTDhy/exec";
-
-function _rowsFromJson(data){
-  try{
-    if(data==null) return [];
-    // Common wrappers
-    if(Array.isArray(data)) return _rowsFromJson({rows:data});
-    if(data.rows) return _rowsFromJson(data.rows);
-    if(data.data) return _rowsFromJson(data.data);
-    // rows may be array of objects
-    if(Array.isArray(data)===false && typeof data==='object') return [];
-    return [];
-  }catch(_){ return []; }
-}
-
-function rowsToProducts(rows){
-  let out=[];
-  if(!rows) return out;
-  if(!Array.isArray(rows) && typeof rows==='object'){
-    const h = rows.headers || rows.header;
-    const rr = rows.rows || rows.values || rows.data || rows.items;
-    if(Array.isArray(h) && Array.isArray(rr)){
-      const header = h.map(x=>String(x||''));
-      for(let i=0;i<rr.length;i++){
-        const line = rr[i]||[]; const o={};
-        for(let j=0;j<header.length;j++){ o[header[j]] = line[j]; }
-        const n = normalizeRow(o);
-        if(n.barcode&&n.name) out.push(n);
-      }
-      return out;
-    }
-    const nested = rows.result || rows.payload || rows.sheet || rows;
-    if(nested && nested!==rows) return rowsToProducts(nested);
-  }
-  if(!Array.isArray(rows)) return out;
-  if(rows.length===0) return out;
-  if(!Array.isArray(rows[0]) && typeof rows[0]==='object'){
-    out = rows.map(normalizeRow).filter(x=>x.barcode&&x.name);
-  }else if(Array.isArray(rows[0])){
-    const header = rows[0].map(x=>String(x||''));
-    for(let i=1;i<rows.length;i++){
-      const r = rows[i]||[]; const o={};
-      for(let j=0;j<header.length;j++){ o[header[j]] = r[j]; }
-      const n = normalizeRow(o);
-      if(n.barcode&&n.name) out.push(n);
-    }
-  }
-  return out;
-}
-
-
-
-async function fetchCloud(){
-  const btn = document.getElementById('btnCloud');
-  try{
-    if(btn) btn.disabled=true;
-    const res = await fetch(CLOUD_URL + "?t=" + Date.now(), {cache:"no-store", redirect:"follow"});
-    const ct = (res.headers.get("content-type")||"").toLowerCase();
-    const status = res.status;
-    let products = [];
-    let text = "";
-
-    if(ct.includes("application/json")){
-      try{
-        const j = await res.json();
-        const rows = Array.isArray(j) ? j : (j.rows || j.data || j.values || j.items || j.sheet || j.records || j.result || j.payload || []);
-        products = rowsToProducts(rows);
-        if(products.length===0 && j && typeof j==='object'){
-          const vals = j.values || j.items || j.records || j.rows;
-          if(Array.isArray(vals)) products = rowsToProducts(vals);
-        }
-      }catch(e){
-        // fall back to text for debug
-        try{ text = JSON.stringify(await res.clone().text()).slice(0,300);}catch(_){}
-      }
-    } else {
-      try{ text = await res.text(); }catch(_){ text="(body okunamadı)"; }
-      console.log("Bulut ham cevap (ilk 300):", text.slice(0,300));
-      function parseCSV(str){
-        const semi = (str.match(/;/g)||[]).length;
-        const comma = (str.match(/,/g)||[]).length;
-        const delim = semi>comma ? ';' : ',';
-        const out=[]; let row=[]; let i=0; let inQ=false; let field='';
-        while(i<str.length){
-          const ch = str[i];
-          if(ch === '"'){
-            if(inQ && str[i+1] === '"'){ field+='"'; i+=2; continue; }
-            inQ = !inQ; i++; continue;
-          }
-          if(!inQ && (ch === '\n' || ch === '\r')){
-            row.push(field); field='';
-            if(row.length>1 || row[0]!=='') out.push(row);
-            row=[];
-            if(ch === '\r' && str[i+1]==='\n') i+=2; else i++;
-            continue;
-          }
-          if(!inQ && ch === delim){
-            row.push(field); field=''; i++; continue;
-          }
-          field += ch; i++;
-        }
-        row.push(field);
-        if(row.length>1 || row[0]!=='') out.push(row);
-        return out;
-      }
-    
-      let parsed=false;
-
-      // JSON as text
-      try{
-        const j = JSON.parse(text);
-        const rows = Array.isArray(j) ? j : (j.rows || j.data || j.values || j.items || j.sheet || j.records || j.result || j.payload || []);
-        products = rowsToProducts(rows);
-        if(products.length>0) parsed=true;
-      }catch(_){}
-
-      // HTML table
-      if(!parsed && /<table[\s\S]*<\/table>/i.test(text)){
-        try{
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(text, 'text/html');
-          const table = doc.querySelector('table');
-          if(table){
-            const rows = Array.from(table.querySelectorAll('tr')).map(tr => Array.from(tr.querySelectorAll('th,td')).map(td => td.textContent.trim()));
-            products = rowsToProducts(rows);
-            if(products.length===0){
-              const header = rows[0] ? rows[0].map(x=>String(x||'')) : [];
-              const objs = rows.slice(1).map(line => {
-                const o={}; for(let j=0;j<header.length;j++){ o[header[j]] = (line[j]||''); } return o;
-              });
-              products = rowsToProducts(objs);
-            }
-            if(products.length>0) parsed=true;
-          }
-        }catch(_){}
-      }
-
-      // CSV/TSV
-      if(!parsed){
-        try{
-          let csv = text;
-          const semiCount = (csv.match(/;/g)||[]).length;
-          const commaCount = (csv.match(/,/g)||[]).length;
-          if(semiCount>commaCount) csv = csv.replace(/;/g,',');
-          let wb = XLSX.read(csv, {type:'string'});
-          const sheet = wb.Sheets[wb.SheetNames[0]];
-          const rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
-          products = rowsObj.map(normalizeRow).filter(x=>x.barcode&&x.name);
-          parsed = products.length>0;
-        }catch(_){}
-      }
-    }
-
-    // Permission/login detection (Google sign-in / access denied)
-    const looksLikeLogin = /accounts\.google\.com|<title>.*Sign in.*<\/title>|<title>.*Oturum aç.*<\/title>|authorize|Access Denied|Yetkisiz/i.test(text||"");
-
-    if(!Array.isArray(products) || products.length===0){
-      let msg = "Buluttan uygun veri alınamadı.\n";
-      msg += "- HTTP Durumu: " + status + "\n";
-      msg += "- İçerik Türü: " + (ct || "(bilinmiyor)") + "\n";
-      const preview = (text||"").slice(0,300).replace(/\n/g,' ');
-      if(preview) msg += "- Örnek Gövde (ilk 300): " + preview + "\n";
-      if(looksLikeLogin){
-        msg += "\nGörünüyor ki Google, giriş/izin sayfası döndürüyor. Apps Script dağıtımını şu şekilde ayarlayın:\n";
-        msg += "• Deploy > Manage deployments > Web app\n";
-        msg += "• Execute as: Me (kendiniz)\n";
-        msg += "• Who has access: Anyone\n";
-        msg += "• CORS için JSON çıkış: ContentService + setHeader('Access-Control-Allow-Origin','*')\n";
-      }
-      // Show modal-like prompt
-      alert(msg);
-      return;
-    }
-
-    PRODUCTS = products;
-    badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Bulut)`;
-    showToast("Güncel veri çekildi");
-    refocusAfterAction(true);
-  }catch(e){
-    alert("Bulut verisi alınamadı: " + e.message);
-  }finally{
-    if(btn) btn.disabled=false;
-  }
-}
-
-
-
-document.addEventListener('DOMContentLoaded', () => {
-  const b = document.getElementById('btnCloud');
-  if(b) b.addEventListener('click', fetchCloud);
-});
-
 
 /* ===== CART ===== */
 function setCart(n){ CART=n; localStorage.setItem('etiket_cart',JSON.stringify(CART)); cartCount.textContent=CART.reduce((a,x)=>a+x.qty,0); }
@@ -778,5 +498,141 @@ async function makeOldListDoc(){
 
 })(); // IIFE
 </script>
+
+<script>
+// --- ULTRA-SIMPLE CSV-ONLY CLOUD FETCH (V7) ---
+const CLOUD_URL = "https://script.google.com/macros/s/AKfycbymC0KeZ-EHPnL4et5bmFLazdvd2ZU-FgWxXcg7sfIU-MHwV1_gvgp5muzwFlwZTDhy/exec";
+
+function parseCSV(str){
+  // Delimiter detection
+  const semi = (str.match(/;/g)||[]).length, comma = (str.match(/,/g)||[]).length;
+  const delim = semi>comma ? ';' : ',';
+  const out=[]; let row=[]; let i=0; let inQ=false; let f='';
+  while(i<str.length){
+    const ch=str[i];
+    if(ch === '"'){
+      if(inQ && str[i+1] === '"'){ f+='"'; i+=2; continue; }
+      inQ=!inQ; i++; continue;
+    }
+    if(!inQ && (ch==='\n' || ch==='\r')){
+      row.push(f); f='';
+      if(row.length>1 || row[0]!=='') out.push(row);
+      row=[]; if(ch==='\r' && str[i+1]==='\n') i+=2; else i++; continue;
+    }
+    if(!inQ && ch===delim){ row.push(f); f=''; i++; continue; }
+    f+=ch; i++;
+  }
+  row.push(f);
+  if(row.length>1 || row[0]!=='') out.push(row);
+  return out;
+}
+
+function normKey(k){
+  if(!k) return '';
+  let s = String(k).toLowerCase();
+  const map = {'ğ':'g','ü':'u','ş':'s','ı':'i','i':'i','ö':'o','ç':'c'};
+  s = s.replace(/[ğüşıiöç]/g, ch=>map[ch]||ch);
+  s = s.replace(/\s+/g,' ').trim();
+  s = s.replace(/[^a-z0-9 ]+/g,' ');
+  return s;
+}
+function pick(dict, candidates){
+  const keys = Object.keys(dict);
+  for(const c of candidates){
+    const ck = normKey(c);
+    for(const k of keys){
+      if(normKey(k)===ck || normKey(k).includes(ck)) return dict[k];
+    }
+  }
+  return null;
+}
+function toBarcode(v){
+  if(v==null) return '';
+  let s=String(v).trim().replace(',', '.'); // scientific comma to dot
+  if(/e\+\d+$/i.test(s)){
+    try{
+      const parts = s.toLowerCase().split('e+');
+      const base = parts[0].replace('.','');
+      const pow = parseInt(parts[1]||'0',10);
+      const decimals = (parts[0].split('.')[1]||'').length;
+      const zeros = Math.max(pow - decimals, 0);
+      s = base + '0'.repeat(zeros);
+    }catch(_){}
+  }
+  return s.replace(/\D/g,'');
+}
+function toPrice(v){
+  if(v==null || v==='') return null;
+  let s=String(v).toLowerCase().replace(/tl|try|₺|\s/g,'');
+  if(s.includes('.') && s.includes(',')) s=s.replace(/\./g,'').replace(',', '.');
+  else if(s.includes(',')) s=s.replace(',', '.');
+  s = s.replace(/(\d)\.(?=\d{3}(\D|$))/g,'$1');
+  const n = parseFloat(s); return isNaN(n)?null:n;
+}
+function toDateYMD(v){
+  if(!v && v!==0) return null;
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  const s=String(v).trim();
+  const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if(m){ const dd=+m[1], mm=+m[2], yy=+m[3]; return new Date(Date.UTC(yy,mm-1,dd)).toISOString().slice(0,10); }
+  return s || null;
+}
+
+async function fetchCloudCSVOnly(){
+  const btn = document.getElementById('btnCloud');
+  try{
+    if(btn) btn.disabled=true;
+    let res = await fetch(CLOUD_URL + "?t=" + Date.now(), {cache:"no-store"});
+    let text = await res.text();
+    if(text.charCodeAt(0)===0xFEFF) text = text.slice(1);
+    text = text.replace(/\r\n/g,'\n');
+
+    const rows = parseCSV(text);
+    if(!rows || rows.length<2){ alert("CSV boş/okunamadı."); return; }
+
+    const header = rows[0];
+    const items = rows.slice(1).map(r => {
+      const obj = {}; for(let j=0;j<header.length;j++){ obj[header[j]] = r[j]||''; } return obj;
+    });
+
+    // Field picks tuned to your headers
+    const products = [];
+    for(const o of items){
+      const barcode = toBarcode(pick(o, ['Barkodu','Barkod','Barkod No','EAN','EAN13']));
+      const name    = String(pick(o, ['Stok Adı','Ürün Adı','Ad','Açıklama'])||'').trim();
+      const price   = toPrice(pick(o, ['MAĞAZA','Mağaza','Satış Fiyatı 1','Satış Fiyatı 1 (KDV Dahil)','Fiyat']));
+      const pdate   = toDateYMD(pick(o, ['Satış Fiyatı 1 Değ. Tar.','Fiyat Değişiklik Tarihi','FD','Değişiklik Tarihi']));
+      if(barcode && name){
+        products.push({ barcode, name, price, priceDate: pdate });
+      }
+    }
+
+    if(!products.length){ alert("CSV okundu ama alanlar eşleşmedi. Başlıkları kontrol et."); return; }
+
+    // Integrate with existing app
+    if(typeof PRODUCTS !== 'undefined'){
+      PRODUCTS = products;
+      if(typeof badgeData !== 'undefined'){
+        badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Bulut/CSV)`;
+      }
+      if(typeof showToast === 'function') showToast('Güncel veri çekildi (CSV)');
+      if(typeof refocusAfterAction === 'function') refocusAfterAction(true);
+    }else{
+      // fallback: show count
+      alert('Yüklendi: ' + products.length + ' ürün (Bulut/CSV)');
+    }
+  }catch(e){
+    alert('CSV çekme hatası: ' + e.message);
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const b = document.getElementById('btnCloud');
+  if(b) b.addEventListener('click', fetchCloudCSVOnly);
+});
+</script>
+
 </body>
 </html>
