@@ -497,6 +497,20 @@ async function makeOldListDoc(){
   $('btnCam').addEventListener('click', ()=> startCamera());
 })();
 
+
+  // Bulut CSV'den gelen ürünler için dinleyici
+  document.addEventListener('cloud:products', (ev)=>{
+    try{
+      const arr = Array.isArray(ev.detail) ? ev.detail : [];
+      if(!arr.length) return;
+      PRODUCTS = arr;
+      const bd = document.getElementById('badgeData');
+      if(bd) bd.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Bulut/CSV)`;
+      if(typeof showToast==='function') showToast('Güncel veri çekildi (Bulut/CSV)');
+      if(typeof refocusAfterAction==='function') refocusAfterAction(true);
+    }catch(e){ console.error('cloud:products apply error', e); }
+  });
+
 })(); // IIFE
 </script>
 
@@ -552,7 +566,7 @@ async function makeOldListDoc(){
         if(barcode && name) products.push({ barcode: barcode, name: name, price: price, priceDate: pdate });
       }
       if(!products.length){ alert("CSV okundu ama alanlar eşleşmedi."); return; }
-      if(typeof PRODUCTS!=='undefined'){ PRODUCTS = products; }
+      document.dispatchEvent(new CustomEvent('cloud:products', {detail: products}));
       const bd = document.getElementById('badgeData'); if(bd) bd.innerHTML = '<i class="fa-solid fa-database"></i> ' + products.length + ' ürün yüklendi (Bulut/CSV)';
       if(typeof showToast==='function') showToast('Güncel veri çekildi (CSV)');
       if(typeof refocusAfterAction==='function') refocusAfterAction(true);
