@@ -83,7 +83,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .pdfFrame{flex:1;border:1px solid var(--line);border-radius:8px}
 </style>
 
-<style id="hide-legacy-camera">
+<style id="hide-legacy-cam">
   #btnCamV3{ display:none !important; }
 </style>
 
@@ -104,8 +104,12 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <div class="control">
         <button id="btnCart" class="btn neutral" style="font-size:16px"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
         <button id="btnPrint" class="btn success" style="font-size:16px"><i class="fa-solid fa-print"></i> Yazdır</button>
-        <button id="btnPriceView" class="btn warning" style="font-size:16px" onclick="window.__startPriceView && window.__startPriceView()"><i class="fa-solid fa-tag"></i> Fiyat Gör</button>
-        <button id="btnCamX" class="btn primary" style="font-size:16px" onclick="window.__openCamX && window.__openCamX()"><i class="fa-solid fa-camera"></i> Kamera Aç</button>
+        <button id="btnPriceView" class="btn warning" style="font-size:16px" onclick="window.__startPriceView && window.__startPriceView()">
+          <i class="fa-solid fa-tag"></i> Fiyat Gör
+        </button>
+        <button id="btnCam" class="btn primary" style="font-size:16px" onclick="window.__openCam && window.__openCam()">
+          <i class="fa-solid fa-camera"></i> Kamera Aç
+        </button>
 
       </div>
     </div>
@@ -520,35 +524,37 @@ if(window.__DEV_TEST__) runTests();
 
 <script id="price-view-mode">
 (function(){
-  var timer=null;
+  var pvTimer=null;
   function clearPV(){
-    if(timer){ try{ clearInterval(timer); }catch(e){} timer=null; }
+    if(pvTimer){ try{ clearInterval(pvTimer); }catch(e){} pvTimer=null; }
     var pv=document.getElementById('pvWrap'); if(pv&&pv.parentNode) pv.parentNode.removeChild(pv);
   }
   window.openPriceView = function(p){
     try{
       var mdl=document.getElementById('mdlProduct');
-      document.getElementById('mName').textContent=p.name;
-      document.getElementById('mPrice').textContent=fmtTRY.format(p.price);
-      document.getElementById('mBarcode').textContent=p.barcode;
+      if(!mdl){ console.warn('mdlProduct not found'); return; }
+      document.getElementById('mName').textContent=p.name ?? '';
+      document.getElementById('mPrice').textContent=fmtTRY.format(p.price ?? 0);
+      document.getElementById('mBarcode').textContent=p.barcode ?? '';
       var d=p.priceDate? new Date(p.priceDate):null;
-      document.getElementById('mDate').textContent = d? d.toLocaleDateString('tr-TR') : '—';
-      document.getElementById('mDateRow').style.display = d? 'block':'none';
+      var row=document.getElementById('mDateRow');
+      if(row) row.style.display = d? 'block':'none';
+      var out=document.getElementById('mDate'); if(out) out.textContent = d? d.toLocaleDateString('tr-TR') : '—';
       var old = isOld(p);
-      document.getElementById('mOld').style.display = old? 'block':'none';
-      mdl.querySelectorAll('[data-qty], #btnCustom').forEach(function(el){ el.style.display='none'; });
-      var cancelBtn = document.getElementById('btnCancel'); if(cancelBtn){ cancelBtn.style.display=''; }
+      var warn=document.getElementById('mOld'); if(warn) warn.style.display = old? 'block':'none';
+
+      try { mdl.querySelectorAll('[data-qty], #btnCustom').forEach(function(el){ el.style.display='none'; }); } catch(e){}
+
       clearPV();
-      var box = mdl.querySelector('.box');
+      var box = mdl.querySelector('.box') || mdl;
       var wrap = document.createElement('div'); wrap.id='pvWrap'; wrap.style.marginTop='8px';
-      wrap.innerHTML = '<div style="font-size:12px;opacity:.8">Bu pencere <b><span id="pvSec">6</span>s</b> sonra kapanacak</div>      <div style="position:relative;height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:6px">        <div id="pvBar" style="position:absolute;left:0;top:0;height:100%;width:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));transition:width .1s"></div>      </div>';
+      wrap.innerHTML = '<div style="font-size:12px;opacity:.8">Bu pencere <b><span id="pvSec">6</span>s</b> sonra kapanacak</div>      <div style="position:relative;height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:6px">        <div id="pvBar" style="position:absolute;left:0;top:0;height:100%;width:100%;background:linear-gradient(90deg,var(--brand,#2563eb),var(--brand2,#22c55e));transition:width .1s"></div>      </div>';
       box.appendChild(wrap);
       var left=6000, step=100;
       var bar=document.getElementById('pvBar'), sec=document.getElementById('pvSec');
-      timer=setInterval(function(){
+      pvTimer=setInterval(function(){
         left -= step; if(left<0) left=0;
-        var pct = Math.round(left/6000*100);
-        if(bar) bar.style.width = pct + '%';
+        if(bar) bar.style.width = Math.round(left/6000*100) + '%';
         if(sec) sec.textContent = Math.ceil(left/1000);
         if(left===0){
           clearPV();
@@ -557,10 +563,13 @@ if(window.__DEV_TEST__) runTests();
           try{ refocusAfterAction(true); }catch(e){}
         }
       }, step);
+
       mdl.classList.add('shown');
+
+      var cancelBtn = document.getElementById('btnCancel');
       if(cancelBtn){
-        var _old = cancelBtn.onclick;
-        cancelBtn.onclick = function(){
+        var _old=cancelBtn.onclick;
+        cancelBtn.onclick=function(){
           clearPV();
           mdl.classList.remove('shown');
           try{ window.__priceViewMode=false; }catch(e){}
@@ -570,171 +579,94 @@ if(window.__DEV_TEST__) runTests();
       }
     }catch(e){ console.warn('openPriceView error', e); }
   };
-  function bindPV(){
-    var pv=document.getElementById('btnPriceView');
-    if(pv && !pv.__bound){
-      pv.__bound=true;
-      pv.addEventListener('click', function(){
-        try{ window.__priceViewMode=true; }catch(e){}
-        var cam=document.getElementById('btnCamX'); if(cam){ cam.click(); }
-      });
-    }
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bindPV);
-  else bindPV();
+
+  window.__startPriceView = function(){ try{ window.__priceViewMode=true; window.openCam && window.openCam(); }catch(e){ alert('Kamera açılamadı: '+e); } };
 })();
 </script>
 
 <script>
-
-// camx.js — Clean Quagga2 camera integration (fresh reset)
+// cam.js — Clean camera integration using BarcodeDetector (no external libs)
 (function(){
-  var quaggaLoaded=false, quaggaLoading=false, quaggaRunning=false, initLock=false;
-  var lastCode=null, lastHit=0; var camSheet=null, camMount=null;
-
-// === Global Modal Watcher: reopen camera ONLY after all modals are closed ===
-var resumeAfter=false, resumeDebounce=null;
-function isShown(node){
-  if(!node || node.nodeType!==1) return false;
-  if(node.hidden) return false;
-  var cs=getComputedStyle(node);
-  return !(cs.display==='none' || cs.visibility==='hidden' || parseFloat(cs.opacity)===0);
-}
-function countOpenModals(){
-  var nodes=document.querySelectorAll('.modal,[role=\"dialog\"],.popup,#popupOverlay,#branchPopupOverlay,#errorOverlay,#searchPopup,#exportPopup,#importPopup,#overwritePopup,.swal2-container,.swal2-shown,#mdlProduct,#mdlPdf');
-  var c=0; nodes.forEach(function(n){ if(isShown(n)) c++; });
-  return c;
-}
-function tryResume(){
-  clearTimeout(resumeDebounce);
-  resumeDebounce=setTimeout(function(){
-    if(!resumeAfter) return;
-    if(countOpenModals()===0){
-      resumeAfter=false;
-      try{ /*keep last mode*/ }catch(e){}
-      openCamSheet();
-    }
-  }, 300);
-}
-var mo1=new MutationObserver(function(){ if(resumeAfter) tryResume(); });
-var mo2=new MutationObserver(function(){ if(resumeAfter) tryResume(); });
-try{
-  mo1.observe(document.body,{subtree:true, attributes:true, attributeFilter:['class','style','hidden']});
-  mo2.observe(document.body,{subtree:true, childList:true});
-}catch(e){}
-
+  var stream=null, scanning=false, rafId=null;
+  var resumeAfter=false, resumeDebounce=null;
+  var lastCode=null, lastHit=0;
+  var sheet=null, mount=null, video=null;
 
   function $(id){ return document.getElementById(id); }
 
-  function ensureButtons(){
-    var btnPrint = $('btnPrint'); if(!btnPrint) return;
-    if(!$('btnCamX')){
-      var cam = document.createElement('button'); cam.id='btnCamX'; cam.className='btn primary'; cam.style.fontSize='16px';
-      cam.innerHTML='<i class="fa-solid fa-camera"></i> Kamera Aç';
-      btnPrint.insertAdjacentElement('afterend', cam);
-      cam.addEventListener('click', openCamSheet);
-    }
-    if(!$('btnPriceView')){
-      var pv = document.createElement('button'); pv.id='btnPriceView'; pv.className='btn warning'; pv.style.fontSize='16px';
-      pv.innerHTML='<i class="fa-solid fa-tag"></i> Fiyat Gör';
-      btnPrint.insertAdjacentElement('afterend', pv);
-      pv.addEventListener('click', function(){ window.__priceViewMode=true; openCamSheet(); });
-    }
-  }
-
   function injectSheet(){
-    if(camSheet) return;
-    camSheet = document.createElement('div');
-    camSheet.id='camSheet';
-    camSheet.innerHTML = '\
+    if(sheet) return;
+    sheet = document.createElement('div');
+    sheet.id='camSheet';
+    sheet.innerHTML = '\
     <style>\
-    #camSheet{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:none}\
-    #camBox{position:absolute;left:50%;top:8%;transform:translateX(-50%);width:min(96vw,720px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden}\
-    #camHead{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb}\
-    #camMount{position:relative;width:100%;height:380px;background:#000}\
-    #camMount video,#camMount canvas,#camMount #interactive{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}\
-    #camFoot{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;background:#fafafa}\
+      #camSheet{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:none}\
+      #camBox{position:absolute;left:50%;top:8%;transform:translateX(-50%);width:min(96vw,720px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden}\
+      #camHead{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb}\
+      #camMount{position:relative;width:100%;height:380px;background:#000}\
+      #camMount video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}\
+      #camFoot{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;background:#fafafa}\
     </style>\
     <div id="camBox">\
       <div id="camHead"><b>Kamera</b><div>\
         <button id="camClose" class="btn">Kapat</button>\
       </div></div>\
-      <div id="camMount"></div>\
+      <div id="camMount"><video id="camVideo" autoplay playsinline muted></video></div>\
       <div id="camFoot">\
         <button id="camStop" class="btn">Durdur</button>\
       </div>\
     </div>';
-    document.body.appendChild(camSheet);
-    $('camClose').addEventListener('click', closeCamSheet);
-    $('camStop').addEventListener('click', stopQuagga);
-    camMount = $('camMount');
+    document.body.appendChild(sheet);
+    $('camClose').addEventListener('click', closeCam);
+    $('camStop').addEventListener('click', stopCamera);
+    mount=$('camMount'); video=$('camVideo');
   }
 
-  function loadQuagga(){
-    return new Promise(function(resolve, reject){
-      if(quaggaLoaded) return resolve();
-      if(quaggaLoading) return resolve();
-      quaggaLoading = true;
-      var s=document.createElement('script');
-      s.src='https://unpkg.com/@ericblade/quagga2/dist/quagga.js';
-      s.onload=function(){ quaggaLoaded=true; resolve(); };
-      s.onerror=function(){ alert('Quagga kütüphanesi yüklenemedi'); reject(); };
-      document.head.appendChild(s);
-    });
-  }
-
-  function openCamSheet(){
-    window.__priceViewMode = !!window.__priceViewMode;
+  window.openCam = function(){
+    try{ window.__priceViewMode = !!window.__priceViewMode; }catch(e){}
     injectSheet();
-    camSheet.style.display='block';
-    startQuagga();
+    sheet.style.display='block';
+    startCamera();
+  };
+  window.closeCam = function(){ stopCamera().then(function(){ sheet.style.display='none'; }); };
+
+  async function startCamera(){
+    if(scanning) return;
+    if(!('BarcodeDetector' in window)){
+      alert('Tarayıcı bu cihazda BarcodeDetector desteklemiyor. En güncel Chrome / Edge deneyin.');
+      return;
+    }
+    try{
+      const formats = await BarcodeDetector.getSupportedFormats();
+      const detector = new BarcodeDetector({ formats: formats.includes('ean_13') ? ['ean_13','ean_8','code_128'] : ['code_128','ean_8'] });
+      stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode: { ideal:'environment' }, width:{ideal:1280}, height:{ideal:720} }, audio:false });
+      video.srcObject = stream;
+      await video.play();
+      scanning = true;
+      const tick = async ()=>{
+        if(!scanning) return;
+        try{
+          const codes = await detector.detect(video);
+          if(codes && codes.length){
+            const code = (codes[0].rawValue ?? codes[0].value ?? '').toString();
+            onDetected(code);
+            return;
+          }
+        }catch(e){ /* ignore */ }
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    }catch(e){
+      alert('Kamera başlatma hatası: ' + e);
+    }
   }
 
-  function closeCamSheet(){
-    stopQuagga().then(function(){ closeCamSheet(); });
-  }
-
-  function startQuagga(){
-    if(initLock) return;
-    initLock = true;
-    loadQuagga().then(async function(){
-      try{
-        camMount.innerHTML='';
-        var tries=0;
-        while((camMount.offsetWidth<100 || camMount.offsetHeight<100) && tries<12){
-          await new Promise(r=>requestAnimationFrame(r)); tries++;
-        }
-        if(camMount.offsetWidth<100 || camMount.offsetHeight<100) camMount.style.height='380px';
-
-        var cfg={
-          inputStream:{ type:'LiveStream', target:camMount,
-            constraints:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} },
-            area:{ top:'20%', right:'10%', left:'10%', bottom:'20%' } },
-          locator:{ patchSize:'large', halfSample:false },
-          numOfWorkers: Math.max(1,(navigator.hardwareConcurrency||2)-1),
-          frequency:12,
-          decoder:{ readers:['ean_reader','ean_8_reader','code_128_reader'] },
-          locate:true
-        };
-        Quagga.init(cfg, function(err){
-          initLock=false;
-          if(err){ alert('Kamera başlatma hatası: '+err); return; }
-          Quagga.start(); quaggaRunning=true;
-          try{ var track=Quagga.cameraAccess.getActiveTrack();
-            if(track&&track.applyConstraints){ track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{}); }
-          }catch(e){}
-          try{ Quagga.offDetected && Quagga.offDetected(); }catch(e){}
-          Quagga.onDetected(onDetected);
-        });
-      }catch(e){ initLock=false; alert('Kamera başlatılamadı: '+e); }
-    });
-  }
-
-  function stopQuagga(){
+  function stopCamera(){
     return new Promise(function(resolve){
-      try{ Quagga && Quagga.offDetected && Quagga.offDetected(); }catch(e){}
-      try{ quaggaRunning && Quagga.stop(); quaggaRunning=false; }catch(e){}
-      try{ camMount && (camMount.innerHTML=''); }catch(e){}
+      scanning=false;
+      try{ rafId && cancelAnimationFrame(rafId); }catch(e){}
+      try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); } }catch(e){}
+      try{ video && (video.srcObject=null); }catch(e){}
       resolve();
     });
   }
@@ -745,45 +677,72 @@ try{
     return ((10-(sum%10))%10) === parseInt(code[12],10);
   }
 
-  function findProductByBarcode(code){
+  function findProduct(code){
     try{
       var arr = window.PRODUCTS || [];
-      return arr.find(function(p){ return p.barcode===code; });
+      return arr.find(function(p){ return p.barcode === code; }) || null;
     }catch(e){ return null; }
   }
 
-  function onDetected(result){
-    var code = result && result.codeResult && result.codeResult.code ? result.codeResult.code : null;
+  function isShown(node){
+    if(!node || node.nodeType!==1) return false;
+    if(node.hidden) return false;
+    var cs = getComputedStyle(node);
+    return !(cs.display==='none' || cs.visibility==='hidden' || parseFloat(cs.opacity)===0);
+  }
+  function countOpenModals(){
+    var nodes = document.querySelectorAll('.modal,[role=\"dialog\"],.popup,#mdlProduct,#mdlPdf,.swal2-container,.swal2-shown');
+    var c=0; nodes.forEach(function(n){ if(isShown(n)) c++; });
+    return c;
+  }
+  function tryResume(){
+    clearTimeout(resumeDebounce);
+    resumeDebounce = setTimeout(function(){
+      if(!resumeAfter) return;
+      if(countOpenModals()===0){
+        resumeAfter=false;
+        window.openCam();
+      }
+    }, 300);
+  }
+  var mo1 = new MutationObserver(function(){ if(resumeAfter) tryResume(); });
+  var mo2 = new MutationObserver(function(){ if(resumeAfter) tryResume(); });
+  try{
+    mo1.observe(document.body,{subtree:true, attributes:true, attributeFilter:['class','style','hidden']});
+    mo2.observe(document.body,{subtree:true, childList:true});
+  }catch(e){}
+
+  function onDetected(code){
     if(!code) return;
-    var now=Date.now(); if(code===lastCode && (now-lastHit)<900) return; lastCode=code; lastHit=now;
+    var now = Date.now();
+    if(code===lastCode && (now-lastHit)<900) return;
+    lastCode=code; lastHit=now;
     if(code.length===13 && !isValidEAN13(code)) return;
 
-    stopQuagga().then(function(){ closeCamSheet();
-      var p = findProductByBarcode(code);
+    stopCamera().then(function(){
+      window.closeCam();
       resumeAfter=true; tryResume();
+      var p = findProduct(code);
       if (window.__priceViewMode && typeof window.openPriceView==='function' && p){
         window.openPriceView(p);
       } else if (typeof window.openProduct==='function' && p){
         window.openProduct(p);
       } else {
-        var inp = $('inpBarcode'); if(inp){ inp.value=code.slice(-6); try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){} }
+        var inp = $('inpBarcode');
+        if(inp){ inp.value = code.slice(-6); try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){} }
       }
       try{ if(navigator.vibrate) navigator.vibrate(35); }catch(e){}
     });
   }
 
-  function init(){ ensureButtons(); }
-  // Export to global for inline onclicks
-  try{ window.openCamSheet = openCamSheet; window.closeCamSheet = closeCamSheet; }catch(e){}
-
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
+  function bind(){
+    var cam = $('btnCam'); if(cam){ cam.addEventListener('click', function(){ window.__priceViewMode=false; window.openCam(); }); }
+    var pv = $('btnPriceView'); if(pv){ pv.addEventListener('click', function(){ window.__priceViewMode=true; window.openCam(); }); }
+    window.__openCam = function(){ window.__priceViewMode=false; window.openCam(); };
+    window.__startPriceView = function(){ window.__priceViewMode=true; window.openCam(); };
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bind); else bind();
 })();
-
-
-/* Public fallbacks for inline onclicks */
-window.__openCamX = function(){ try{ openCamSheet(); }catch(e){ alert('Kamera açılamadı: '+e); } };
-window.__startPriceView = function(){ try{ window.__priceViewMode=true; openCamSheet(); }catch(e){ alert('Kamera açılamadı: '+e); } };
-
 </script>
 </body>
 </html
