@@ -180,7 +180,7 @@
       try{ stop(); }catch(_e){}
       setTimeout(function(){
         try{ var ms=$('mdlSearch'); if(ms) ms.classList.remove('shown'); }catch(_e){}
-        try{ if(typeof openProduct==='function') openProduct(match); }catch(_e){}
+        try{ if (window.__priceViewMode && typeof openPriceView===\'function\') openPriceView(match); else if(typeof openProduct===\'function\') openProduct(match); }catch(_e){}
       }, 50);
       return;
     }
@@ -214,6 +214,8 @@
       track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
     });
   }
+
+  async 
 // === Global Modal Resume Guard (robust) ===
 (function(){
   var _globalModalObserver = null;
@@ -283,7 +285,7 @@
   try{ ensureGlobalModalWatcher(); }catch(_e){}
   // When product found sets resumeAfter=true, they should call ensureGlobalModalWatcher again; patch below if needed.
 })();
-async function openModal(){
+function openModal(){
     foundLock = false;
     show();
     try{

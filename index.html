@@ -99,6 +99,9 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <div class="control">
         <button id="btnCart" class="btn neutral" style="font-size:16px"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
         <button id="btnPrint" class="btn success" style="font-size:16px"><i class="fa-solid fa-print"></i> Yazdır</button>
+        <button id="btnPriceView" class="btn warning" style="font-size:16px"><i class="fa-solid fa-tag"></i> Fiyat Gör</button>
+        <button id="btnCamV3" class="btn primary" style="font-size:16px"><i class="fa-solid fa-camera"></i> Kamera</button>
+
       </div>
     </div>
 
@@ -128,7 +131,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     <div class="price" id="mPrice">₺0,00</div>
     <div class="mini barcodeBig">Barkod: <span id="mBarcode"></span></div>
     <div class="mini" id="mDateRow">Fiyat Değişiklik Tarihi: <span id="mDate"></span></div>
-    <div id="mOld" class="warn" style="display:none">⚠️ Fiyat değişiklik tarihi 6 aydan eski! Yöneticinize bilgi verin.</div>
+    <div id="mOld" class="warn" style="display:none">⚠️ Fiyat değişiklik tarihi 12 aydan eski! Yöneticinize bilgi verin.</div>
     <div class="actions">
       <button class="btn" data-qty="1">1 Adet</button>
       <button class="btn" data-qty="2">2 Adet</button>
@@ -236,7 +239,7 @@ $('fileExcel').addEventListener('change', (ev)=>{
 });
 
 /* ===== SEARCH ===== */
-function isOld(p){ return p.priceDate ? monthsDiff(new Date(p.priceDate))>6 : false; }
+function isOld(p){ return p.priceDate ? monthsDiff(new Date(p.priceDate))>12 : false; }
 function showResults(title,arr){ LAST_RESULTS=arr; $('mFilter').textContent=title; $('mCount').textContent=arr.length; const L=$('mList'); L.innerHTML=''; arr.slice(0,200).forEach(p=>{ const li=document.createElement('div'); li.className='item'; li.innerHTML=`<div><div class="nm">${p.name}</div><div class="bc">${p.barcode}</div></div><div>${isOld(p)?'<span class="tag-old">Eski fiyat</span>':''}<span style="font-weight:900;margin-left:8px">${fmtTRY.format(p.price)}</span></div>`; li.onclick=()=>{ $('mdlSearch').classList.remove('shown'); openProduct(p); }; L.appendChild(li); }); $('mdlSearch').classList.add('shown'); }
 function filterByName(q){ const s=q.trim().toLowerCase(); if(s.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=>p.name.toLowerCase().includes(s)); if(res.length) showResults(`Ad: "${q}"`,res); else $('mdlSearch').classList.remove('shown'); }
 function filterByLast6(v){ const t=v.replace(/\D/g,''); if(t.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=>p.barcode.endsWith(t)); if(res.length) showResults(`Barkod son: ${t}`,res); else $('mdlSearch').classList.remove('shown'); }
@@ -590,6 +593,95 @@ if(window.__DEV_TEST__) runTests();
       }
     }
   });
+})();
+</script>
+
+
+<script id="price-view-mode">
+(function(){
+  var priceTimer=null;
+  function clearPV(){
+    if(priceTimer){ try{ clearInterval(priceTimer); }catch(e){} priceTimer=null; }
+    var pv=document.getElementById('pvWrap'); if(pv&&pv.parentNode) pv.parentNode.removeChild(pv);
+  }
+  window.openPriceView = function(p){
+    try{
+      var mdl=document.getElementById('mdlProduct');
+      document.getElementById('mName').textContent=p.name;
+      document.getElementById('mPrice').textContent=fmtTRY.format(p.price);
+      document.getElementById('mBarcode').textContent=p.barcode;
+      var d=p.priceDate? new Date(p.priceDate):null;
+      document.getElementById('mDate').textContent = d? d.toLocaleDateString('tr-TR') : '—';
+      document.getElementById('mDateRow').style.display = d? 'block':'none';
+      var old = isOld(p);
+      document.getElementById('mOld').style.display = old? 'block':'none';
+
+      // hide qty buttons & custom
+      mdl.querySelectorAll('[data-qty], #btnCustom').forEach(function(el){ el.style.display='none'; });
+      // ensure cancel button visible
+      var cancelBtn = document.getElementById('btnCancel'); if(cancelBtn){ cancelBtn.style.display=''; }
+
+      // add countdown progress (6s)
+      clearPV();
+      var box = mdl.querySelector('.box');
+      var wrap = document.createElement('div'); wrap.id='pvWrap';
+      wrap.style.cssText='margin-top:8px';
+      wrap.innerHTML = '<div style="font-size:12px;opacity:.8">Bu pencere <b><span id="pvSec">6</span>s</b> sonra kapanacak</div>\
+      <div style="position:relative;height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:6px">\
+        <div id="pvBar" style="position:absolute;left:0;top:0;height:100%;width:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));transition:width .1s"></div>\
+      </div>';
+      box.appendChild(wrap);
+
+      var left=6000, step=100;
+      var bar=document.getElementById('pvBar'), sec=document.getElementById('pvSec');
+      priceTimer=setInterval(function(){
+        left -= step; if(left<0) left=0;
+        var pct = Math.round(left/6000*100);
+        if(bar) bar.style.width = pct + '%';
+        if(sec) sec.textContent = Math.ceil(left/1000);
+        if(left===0){
+          clearPV();
+          mdl.classList.remove('shown');
+          try{ window.__priceViewMode=false; }catch(e){}
+          try{ refocusAfterAction(true); }catch(e){}
+        }
+      }, step);
+
+      mdl.classList.add('shown');
+
+      if(cancelBtn){
+        var _old = cancelBtn.onclick;
+        cancelBtn.onclick = function(){
+          clearPV();
+          mdl.classList.remove('shown');
+          try{ window.__priceViewMode=false; }catch(e){}
+          try{ refocusAfterAction(true); }catch(e){}
+          if(_old) try{ _old(); }catch(e){}
+        };
+      }
+    }catch(e){ console.warn('openPriceView error', e); }
+  };
+
+  function bind(){
+    var cam = document.getElementById('btnCamV3');
+    var pv  = document.getElementById('btnPriceView');
+    if (cam && !cam.__boundCam){
+      cam.addEventListener('click', function(){
+        try{ window.__priceViewMode=false; }catch(e){}
+        try{ openModal(); } catch(e){ console.warn('openModal error', e); }
+      });
+      cam.__boundCam = true;
+    }
+    if (pv && !pv.__boundPV){
+      pv.addEventListener('click', function(){
+        try{ window.__priceViewMode=true; }catch(e){}
+        try{ openModal(); } catch(e){ console.warn('openModal error', e); }
+      });
+      pv.__boundPV = true;
+    }
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
 })();
 </script>
 
