@@ -507,22 +507,26 @@ async function makeOldListDoc(){
 <script>
 $('btnLoadCsv').addEventListener('click', async () => {
   try {
-    const res = await fetch("https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv");
+    const proxy = "https://cors-anywhere.herokuapp.com/";
+    const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQAL1Sv9G-ZRLj7-ukvY0ugaSBMscgoiM7Hvo3iLqmwVNKQYmHZhRY0-K3rimSvVw/pub?output=csv";
+    
+    badgeData.innerHTML = `<i class="fa-solid fa-database"></i> Veri yükleniyor...`;
+    const res = await fetch(proxy + sheetUrl);
+    if (!res.ok) throw new Error("Veri çekilemedi: " + res.status);
+    
     const csvText = await res.text();
     const wb = XLSX.read(csvText, { type: 'string' });
     const sheet = wb.Sheets[wb.SheetNames[0]];
     let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true, cellDates: true });
     let arr = rowsObj.map(normalizeRow).filter(x => x.barcode && x.name);
+    
     PRODUCTS = arr;
     badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Google Sheets)`;
-    if (PRODUCTS.length > 0) {
-      showToast('Google Sheets verisi yüklendi');
-    } else {
-      alert('Uygun satır bulunamadı.');
-    }
+    if (PRODUCTS.length > 0) showToast('Google Sheets verisi yüklendi');
+    else alert('Uygun satır bulunamadı.');
   } catch (err) {
     console.error(err);
-    alert('Google Sheets verisi alınamadı');
+    alert('Google Sheets verisi alınamadı: ' + err.message);
   }
 });
 </script>
