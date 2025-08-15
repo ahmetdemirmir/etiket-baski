@@ -773,6 +773,9 @@ try{
   }
 
   function init(){ ensureButtons(); }
+  // Export to global for inline onclicks
+  try{ window.openCamSheet = openCamSheet; window.closeCamSheet = closeCamSheet; }catch(e){}
+
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
 
