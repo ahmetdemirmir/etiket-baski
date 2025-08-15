@@ -339,6 +339,7 @@ function rowsToProducts(rows){
   return out;
 }
 
+
 async function fetchCloud(){
   const btn = document.getElementById('btnCloud');
   try{
@@ -349,34 +350,63 @@ async function fetchCloud(){
     let products = [];
     if(ct.includes("application/json")){
       const j = await res.json();
-      // Try common shapes:
-      // 1) {rows:[{...}]} or {data:[...]} or directly [ ... ]
-      const rows = Array.isArray(j) ? j : (j.rows || j.data || j.sheet || j.values || j.records || j.items || []);
+      const rows = Array.isArray(j) ? j : (j.rows || j.data || j.values || j.items || j.sheet || j.records || j.result || j.payload || []);
       products = rowsToProducts(rows);
-      // If still empty and json is object-of-arrays, attempt convert
-      if(products.length===0 && j && typeof j==='object' && !Array.isArray(j)){
+      if(products.length===0 && j && typeof j==='object'){
         const vals = j.values || j.items || j.records || j.rows;
         if(Array.isArray(vals)) products = rowsToProducts(vals);
       }
     }else{
-      // Try parsing as CSV/TSV/plain table via XLSX
+      // TEXT branch (CSV/HTML/JSON-string)
       const text = await res.text();
-      let wb = null, ok=false;
+      console.log("Bulut ham cevap (ilk 200):", text.slice(0,200));
+      let parsed = false;
+
+      // 1) Try JSON from text
       try{
-        wb = XLSX.read(text, {type:'string'});
-        ok = true;
-      }catch(_){ /* may be JSON string */ }
-      if(!ok){
-        try{ const j = JSON.parse(text); const rows = Array.isArray(j)?j:(j.rows||j.data||j.values||j.items||[]); products = rowsToProducts(rows); }
-        catch(e){ /* give up */ }
-      }else{
+        const j = JSON.parse(text);
+        const rows = Array.isArray(j) ? j : (j.rows || j.data || j.values || j.items || j.sheet || j.records || j.result || j.payload || []);
+        products = rowsToProducts(rows);
+        if(products.length>0) parsed=true;
+      }catch(_){}
+
+      // 2) If contains <table>, parse HTML table
+      if(!parsed && /<table[\s\S]*<\/table>/i.test(text)){
         try{
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, 'text/html');
+          const table = doc.querySelector('table');
+          if(table){
+            const rows = Array.from(table.querySelectorAll('tr')).map(tr => Array.from(tr.querySelectorAll('th,td')).map(td => td.textContent.trim()));
+            products = rowsToProducts(rows);
+            if(products.length===0){
+              const header = rows[0] ? rows[0].map(x=>String(x||'')) : [];
+              const objs = rows.slice(1).map(line => {
+                const o={}; for(let j=0;j<header.length;j++){ o[header[j]] = (line[j]||''); } return o;
+              });
+              products = rowsToProducts(objs);
+            }
+            if(products.length>0) parsed=true;
+          }
+        }catch(_){}
+      }
+
+      // 3) Try CSV/TSV with XLSX; also support semicolon-separated
+      if(!parsed){
+        try{
+          let csv = text;
+          const semiCount = (csv.match(/;/g)||[]).length;
+          const commaCount = (csv.match(/,/g)||[]).length;
+          if(semiCount>commaCount) csv = csv.replace(/;/g,',');
+          let wb = XLSX.read(csv, {type:'string'});
           const sheet = wb.Sheets[wb.SheetNames[0]];
           const rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
           products = rowsObj.map(normalizeRow).filter(x=>x.barcode&&x.name);
+          if(products.length>0) parsed=true;
         }catch(_){}
       }
     }
+
     if(!Array.isArray(products) || products.length===0){
       alert("Buluttan uygun veri alınamadı. Apps Script çıktısını kontrol edin.");
       return;
@@ -391,6 +421,7 @@ async function fetchCloud(){
     if(btn) btn.disabled=false;
   }
 }
+
 
 document.addEventListener('DOMContentLoaded', () => {
   const b = document.getElementById('btnCloud');
