@@ -46,7 +46,7 @@
 
   // === Engine ===
   var stream=null,track=null,detector=null,running=false,paused=false,failCount=0,lastCode='',lastTs=0;
-  var foundLock=false, resumeAfterProduct=false;
+  var foundLock=false, resumeAfter=false;
 
   function supported(){ try{ return ('BarcodeDetector' in window); }catch(_e){ return false; } }
   async function listCameras(){ var devs=await navigator.mediaDevices.enumerateDevices(); return devs.filter(function(d){ return d.kind==='videoinput'; }); }
@@ -63,7 +63,7 @@
     $('chkTorchV3').disabled = !caps.torch;
     paused=false; running=true; $('btnCamPauseV3').textContent='Durdur';
     detector=null;
-    if(supported()){ try{ var fmts=(BarcodeDetector.getSupportedFormats and await BarcodeDetector.getSupportedFormats())||[]; detector = (fmts && fmts.indexOf('ean_13')>-1)? new BarcodeDetector({formats:['ean_13','ean_8','code_128']}): new BarcodeDetector(); }catch(_e){ detector=null; } }
+    if(supported()){ try{ var fmts=(BarcodeDetector.getSupportedFormats && await BarcodeDetector.getSupportedFormats())||[]; detector = (fmts && fmts.indexOf('ean_13')>-1)? new BarcodeDetector({formats:['ean_13','ean_8','code_128']}): new BarcodeDetector(); }catch(_e){ detector=null; } }
     requestAnimationFrame(loop);
   }
 
@@ -73,7 +73,7 @@
     try{ if(stream) stream.getTracks().forEach(function(t){ try{t.stop();}catch(_e){} }); }catch(_e){}
     stream=null; track=null; detector=null;
   }
-  async function stopAll(){ resumeAfterProduct=false; await stop(); hide(); }
+  async function stopAll(){ resumeAfter=false; await stop(); hide(); }
 
   async function loop(){
     if(!running || paused){ return; }
@@ -99,6 +99,47 @@
     }
   }
 
+  // Detect when modals open/close
+  var SEARCH_IDS = ['mdlSearch','searchModal','search-popup'];
+  var PRODUCT_IDS = ['mdlProduct','productModal','product-popup','productDetail','productDetails','mdlUrun','urunModal'];
+  function isShown(el){
+    if(!el) return false;
+    var cs = window.getComputedStyle(el);
+    if(el.className && /(^|\s)shown(\s|$)/.test(el.className)) return true;
+    return !(cs.display==='none' || cs.visibility==='hidden' || cs.opacity==='0');
+  }
+  function watchModal(el){
+    if(!el || el.__camWatch) return;
+    var obs = new MutationObserver(function(){
+      var vis = isShown(el);
+      if(!vis && resumeAfter){
+        resumeAfter = false;
+        foundLock = false;
+        setTimeout(function(){ try{ openModal(); }catch(_e){} }, 120);
+      }
+    });
+    obs.observe(el, { attributes:true, attributeFilter:['class','style','hidden'] });
+    el.__camWatch = obs;
+  }
+  function scanForModals(){
+    SEARCH_IDS.concat(PRODUCT_IDS);
+    var i, id, el;
+    for(i=0;i<SEARCH_IDS.length;i++){ id=SEARCH_IDS[i]; el=$(id); if(el) watchModal(el); }
+    for(i=0;i<PRODUCT_IDS.length;i++){ id=PRODUCT_IDS[i]; el=$(id); if(el) watchModal(el); }
+    // generic fallback
+    var gens = document.querySelectorAll('.modal,[role="dialog"]');
+    for(i=0;i<gens.length;i++){ watchModal(gens[i]); }
+  }
+  function tryAutoStopOnSearchOpen(){
+    // if a search modal is visible, stop camera now
+    var i, el;
+    for(i=0;i<SEARCH_IDS.length;i++){ el=$(SEARCH_IDS[i]); if(el && isShown(el)){ resumeAfter=true; stop(); hide(); return true; } }
+    // generic check
+    var gens = document.querySelectorAll('.modal,[role="dialog"]');
+    for(i=0;i<gens.length;i++){ if(isShown(gens[i])){ resumeAfter=true; stop(); hide(); return true; } }
+    return false;
+  }
+
   function onCode(text){
     if(foundLock) return;
     var now=Date.now(); var code=String(text||'').replace(/\D/g,'');
@@ -122,7 +163,7 @@
 
     if(match){
       foundLock = true;
-      resumeAfterProduct = true;  // seçim bitince otomatik yeniden başlat
+      resumeAfter = true;
       try{ beepFx(true); }catch(_e){}
       try{ hide(); }catch(_e){}
       try{ stop(); }catch(_e){}
@@ -133,36 +174,14 @@
       return;
     }
 
+    // eşleşme yoksa mevcut akışı tetikle (son 6), ve arama popup'ı açılır açılmaz durdur
     var inp=$('inpBarcode');
     if(inp){ inp.value=code.slice(-6); try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(_e){} }
     beepFx(true);
+    setTimeout(tryAutoStopOnSearchOpen, 80);
   }
 
-  // === Re-open camera when product popup closes ===
-  function watchProductModal(){
-    // id'niz farklıysa, buraya alternatifleri ekleyin:
-    var ids = ['mdlProduct','productModal','product-popup'];
-    var el = null;
-    for (var i=0;i<ids.length;i++){ el = $(ids[i]); if(el) break; }
-    if(!el) return;
-    if(el.__v3obs) return;
-    var obs = new MutationObserver(function(list){
-      for(var i=0;i<list.length;i++){
-        var m=list[i];
-        if(m.type==='attributes' && m.attributeName==='class'){
-          var shown = /(^|\s)shown(\s|$)/.test(el.className);
-          if(!shown && resumeAfterProduct){
-            resumeAfterProduct = false;
-            foundLock = false;
-            setTimeout(function(){ try{ openModal(); }catch(_e){} }, 120);
-          }
-        }
-      }
-    });
-    obs.observe(el, { attributes:true, attributeFilter:['class'] });
-    el.__v3obs = obs;
-  }
-
+  // === Controls ===
   function bind(){
     var rng=$('rngZoomV3');
     rng.addEventListener('input', function(){
@@ -208,7 +227,7 @@
     window.addEventListener('pagehide', stopAll);
   }
 
-  document.addEventListener('DOMContentLoaded', function(){ ensureUI(); bind(); wire(); watchProductModal(); });
-  var mo=new MutationObserver(function(){ wire(); watchProductModal(); });
+  document.addEventListener('DOMContentLoaded', function(){ ensureUI(); bind(); wire(); scanForModals(); });
+  var mo=new MutationObserver(function(){ wire(); scanForModals(); });
   mo.observe(document.body,{childList:true,subtree:true});
 })();
