@@ -82,9 +82,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .pdfBox{width:min(95vw,920px);height:90vh;display:flex;flex-direction:column}
 .pdfFrame{flex:1;border:1px solid var(--line);border-radius:8px}
 </style>
-
-<!-- Mobil Kamera (Yeni) -->
-<script src="camera-v3.js" defer></script>
 </head>
 <body>
 <header>
@@ -513,4 +510,219 @@ if(window.__DEV_TEST__) runTests();
 })(); // IIFE yalnız sonda
 </script>
 </body>
-</html>
+</html
+<!-- ===== Mobil Kamera (Native-first) — INLINE ===== -->
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function create(tag, props, styles){
+    var el = document.createElement(tag);
+    if (props) Object.keys(props).forEach(function(k){ el[k]=props[k]; });
+    if (styles) Object.keys(styles).forEach(function(k){ el.style[k]=styles[k]; });
+    return el;
+  }
+  function validEAN13(code){
+    if(!/^\d{13}$/.test(code)) return false;
+    var s=code.split('').map(Number), sum=0;
+    for(var i=0;i<12;i++) sum+=s[i]*(i%2?3:1);
+    return ((10-(sum%10))%10)===s[12];
+  }
+  function beepFx(ok){
+    try{
+      if(typeof window.beep==='function') window.beep(ok);
+      else if(navigator.vibrate) navigator.vibrate(ok?[40]:[20,30,20]);
+    }catch(_e){}
+  }
+
+  function ensureUI(){
+    if(!document.getElementById('btnCamV3')){
+      var btn=create('button',{id:'btnCamV3',className:'btn primary'});
+      btn.style.marginLeft='8px';
+      var ico=create('i',{className:'fa-solid fa-camera'});
+      btn.appendChild(ico); btn.appendChild(document.createTextNode(' Kamera (Yeni)'));
+      var bars=document.querySelectorAll('.control');
+      if(bars.length) bars[0].appendChild(btn); else document.body.appendChild(btn);
+    }
+    if(!document.getElementById('mdlCamV3')){
+      var overlay=create('div',{id:'mdlCamV3'},{position:'fixed',left:'0',top:'0',right:'0',bottom:'0',background:'rgba(0,0,0,.55)',display:'none',zIndex:'9998'});
+      var box=create('div',{className:'box'},{width:'min(96vw,720px)',maxHeight:'92vh',overflow:'auto',padding:'10px',background:'#fff',borderRadius:'12px',margin:'4vh auto'});
+      var h=create('h3',null,{margin:'6px 10px 10px'}); h.textContent='Barkod Tara (Yeni Motor)'; box.appendChild(h);
+      var bar=create('div',null,{display:'flex',gap:'8px',alignItems:'center',margin:'0 10px 8px',flexWrap:'wrap'});
+      var sel=create('select',{id:'camSelectV3',className:'input'},{minWidth:'220px',flex:'1'});
+      var tw=create('label',null,{display:'flex',alignItems:'center',gap:'6px'});
+      var torch=create('input',{id:'chkTorchV3',type:'checkbox'});
+      tw.appendChild(torch); tw.appendChild(document.createTextNode('Flaş'));
+      var zw=create('div',null,{display:'flex',alignItems:'center',gap:'6px'});
+      zw.appendChild(document.createTextNode('Zoom'));
+      var rng=create('input',{id:'rngZoomV3',type:'range'},{width:'140px'}); rng.min='1'; rng.max='1'; rng.step='0.1'; rng.value='1';
+      var p=create('button',{id:'btnCamPauseV3',className:'btn neutral'}); p.textContent='Durdur';
+      var c=create('button',{id:'btnCamCloseV3',className:'btn danger'}); c.textContent='Kapat';
+      bar.appendChild(sel); bar.appendChild(tw); bar.appendChild(zw); zw.appendChild(rng); bar.appendChild(p); bar.appendChild(c); box.appendChild(bar);
+      var area=create('div',null,{padding:'0 10px 10px'});
+      var v=create('video',{id:'camVideoV3',playsInline:true,autoplay:true,muted:true},{width:'100%',border:'1px solid #d6dbe6',borderRadius:'12px',background:'#000'});
+      var canvas=create('canvas',{id:'camCanvasV3'},{display:'none'});
+      area.appendChild(v); area.appendChild(canvas); box.appendChild(area);
+      var hint=create('small',{className:'hint'},{display:'block',margin:'0 12px 4px',color:'#64748b'});
+      hint.textContent='İpucu: Ürüne 15–25 cm yaklaşın. Odak zayıfsa zoom’u artırın veya flaşı açın.'; box.appendChild(hint);
+      overlay.appendChild(box);
+      overlay.addEventListener('click', function(ev){ if(ev.target && ev.target.id==='mdlCamV3'){ stopAll(); } });
+      document.body.appendChild(overlay);
+    }
+  }
+  function show(){ document.getElementById('mdlCamV3').style.display='block'; }
+  function hide(){ document.getElementById('mdlCamV3').style.display='none'; }
+
+  var stream=null, track=null, detector=null, running=false, paused=false, failCount=0, lastCode='', lastTs=0, foundLock=false;
+
+  function supported(){ try{ return ('BarcodeDetector' in window); }catch(_e){ return false; } }
+  async function listCameras(){ var devs=await navigator.mediaDevices.enumerateDevices(); return devs.filter(function(d){return d.kind==='videoinput';}); }
+
+  async function start(deviceId){
+    if(stream) await stop();
+    var cs={ audio:false, video:{ deviceId: deviceId? {exact:deviceId}:undefined, facingMode: deviceId? undefined : {ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} } };
+    stream=await navigator.mediaDevices.getUserMedia(cs);
+    var v=document.getElementById('camVideoV3'); v.srcObject=stream;
+    track=stream.getVideoTracks()[0];
+    var caps=track.getCapabilities?track.getCapabilities():{};
+    var sets=track.getSettings?track.getSettings():{};
+    try{ await track.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); }catch(_e){}
+    var rng=document.getElementById('rngZoomV3');
+    if(caps.zoom){ rng.min=caps.zoom.min||1; rng.max=caps.zoom.max||1; rng.step=caps.zoom.step||0.1; rng.value=sets.zoom||rng.min; rng.disabled=false; } else { rng.min='1'; rng.max='1'; rng.value='1'; rng.disabled=true; }
+    document.getElementById('chkTorchV3').disabled = !caps.torch;
+    paused=false; running=true; document.getElementById('btnCamPauseV3').textContent='Durdur';
+    detector=null;
+    if(supported()){
+      try{
+        var fmts=(BarcodeDetector.getSupportedFormats && await BarcodeDetector.getSupportedFormats()) || [];
+        if(fmts && fmts.indexOf('ean_13')>-1){ detector=new BarcodeDetector({formats:['ean_13','ean_8','code_128']}); }
+        else { detector=new BarcodeDetector(); }
+      }catch(_e){ detector=null; }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  async function stop(){
+    running=false;
+    try{ if(track) track.stop(); }catch(_e){}
+    try{ if(stream) stream.getTracks().forEach(function(t){ try{t.stop();}catch(_e){} }); }catch(_e){}
+    stream=null; track=null; detector=null;
+  }
+  async function stopAll(){ await stop(); hide(); }
+
+  async function loop(){
+    if(!running || paused){ return; }
+    var v=document.getElementById('camVideoV3'); if(v.readyState<2){ requestAnimationFrame(loop); return; }
+    if(detector){
+      try{
+        var arr=await detector.detect(v);
+        if(arr && arr.length){ onCode(arr[0].rawValue||''); failCount=0; }
+        else onFail();
+      }catch(_e){ onFail(); }
+      requestAnimationFrame(loop); return;
+    }
+    onFail(); requestAnimationFrame(loop);
+  }
+
+  function onFail(){
+    failCount++;
+    if(track && track.getCapabilities){
+      var caps=track.getCapabilities();
+      if(caps.zoom && failCount % 40 === 0){
+        var s=track.getSettings(); var step=caps.zoom.step||0.25;
+        var next=Math.min((s.zoom||1)+step, caps.zoom.max||s.zoom||1);
+        track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
+        document.getElementById('rngZoomV3').value = String(next);
+      }
+    }
+  }
+
+  function onCode(text){
+    if(foundLock) return;
+    var now=Date.now();
+    var code=String(text||'').replace(/\D/g,'');
+    if(!code) return;
+    if(code===lastCode && (now-lastTs)<1200) return;
+    lastCode=code; lastTs=now;
+    if(/^\d{13}$/.test(code) && !validEAN13(code)){ beepFx(false); return; }
+
+    var match=null;
+    try{
+      if(window.PRODUCTS && Array.isArray(PRODUCTS)){
+        var norm=function(x){ return String(x||'').replace(/\D/g,''); };
+        match = PRODUCTS.find(function(p){ return norm(p.barcode)===code; });
+        if(!match){
+          var last6=code.slice(-6);
+          var cands = PRODUCTS.filter(function(p){ var b=norm(p.barcode); return b && b.slice(-6)===last6; });
+          if(cands.length===1) match=cands[0];
+        }
+      }
+    }catch(_e){}
+
+    if(match){
+      foundLock = true;
+      try{ beepFx(true); }catch(_e){}
+      try{ hide(); }catch(_e){}
+      try{ stop(); }catch(_e){}
+      setTimeout(function(){
+        try{ var ms=document.getElementById('mdlSearch'); if(ms) ms.classList.remove('shown'); }catch(_e){}
+        try{ if(typeof openProduct==='function') openProduct(match); }catch(_e){}
+      }, 50);
+      return;
+    }
+
+    var inp=document.getElementById('inpBarcode');
+    if(inp){ inp.value=code.slice(-6); try{ inp.dispatchEvent(new Event('input',{bubbles:true})); }catch(_e){} }
+    beepFx(true);
+  }
+
+  function bind(){
+    var rng=document.getElementById('rngZoomV3');
+    rng.addEventListener('input', function(){
+      if(!track || !track.applyConstraints) return;
+      var z=parseFloat(rng.value||'1');
+      track.applyConstraints({ advanced:[{ zoom:z }] }).catch(function(){});
+    });
+    document.getElementById('chkTorchV3').addEventListener('change', function(){
+      if(!track || !track.applyConstraints) return;
+      var on=document.getElementById('chkTorchV3').checked;
+      track.applyConstraints({ advanced:[{ torch: !!on }] }).catch(function(){ document.getElementById('chkTorchV3').checked=false; });
+    });
+    document.getElementById('camVideoV3').addEventListener('click', function(){
+      if(!track || !track.getCapabilities) return;
+      var caps=track.getCapabilities(); if(!caps.zoom) return;
+      var cur=parseFloat((document.getElementById('rngZoomV3').value)||'1');
+      var next=Math.min(cur+(caps.zoom.step||0.25), caps.zoom.max||cur);
+      document.getElementById('rngZoomV3').value=String(next);
+      track.applyConstraints({ advanced:[{ zoom: next }] }).catch(function(){});
+    });
+  }
+
+  async function openModal(){
+    foundLock = false;
+    show();
+    try{
+      var cams = await listCameras();
+      var sel=document.getElementById('camSelectV3'); sel.innerHTML='';
+      cams.forEach(function(d,i){ var o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||('Kamera '+(i+1)); sel.appendChild(o); });
+      var back=cams.find(function(d){ return /back|arka|environment|rear/i.test(d.label||''); });
+      sel.value = back ? back.deviceId : (cams[0]? cams[0].deviceId : '');
+      await start(sel.value);
+      sel.onchange = async function(){ await start(sel.value); };
+    }catch(e){
+      alert('Kamera listesi alınamadı. Tarayıcı izni gerekebilir.');
+    }
+  }
+
+  function wire(){
+    var b=document.getElementById('btnCamV3'); if(b && !b.__wired){ b.__wired=true; b.addEventListener('click', function(){ openModal(); }); }
+    var bc=document.getElementById('btnCamCloseV3'); if(bc && !bc.__wired){ bc.__wired=true; bc.addEventListener('click', function(){ stopAll(); }); }
+    var bp=document.getElementById('btnCamPauseV3'); if(bp && !bp.__wired){ bp.__wired=true; bp.addEventListener('click', function(e){ if(!running) return; if(!paused){ paused=true; e.target.textContent='Devam Et'; } else { paused=false; e.target.textContent='Durdur'; requestAnimationFrame(loop); } }); }
+    window.addEventListener('pagehide', stopAll);
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){ ensureUI(); bind(); wire(); });
+  var mo=new MutationObserver(wire); mo.observe(document.body,{childList:true,subtree:true});
+})();
+</script>
+>
