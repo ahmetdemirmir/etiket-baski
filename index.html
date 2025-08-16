@@ -186,7 +186,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 <script>
 (function () {
 /* ===== STATE ===== */
-let PRODUCTS=[]; let CART=JSON.parse(localStorage.getItem('etiket_cart')||'[]'); let LAST_RESULTS=[];
+let PRODUCTS = window.PRODUCTS || []; window.PRODUCTS = PRODUCTS; let CART=JSON.parse(localStorage.getItem('etiket_cart')||'[]'); let LAST_RESULTS=[];
 let FX=JSON.parse(localStorage.getItem('etiket_fx')||'true');
 const IS_DESKTOP = window.matchMedia('(pointer: fine)').matches && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 let __docLabels=null, __docOld=null, __urlLabels=null, __urlOld=null;
@@ -243,12 +243,93 @@ function normKey(s){return String(s||'').toLowerCase().replace(/[ıİ]/g,'i').re
 function normalizeRow(r){ const m=mapRowByKeys(r); return { barcode:parseBarcode(m.barcode), name:String(m.name||'').trim(), price:parsePrice(m.price), priceDate:parseExcelDate(m.date) }; }
 
 /* Google Sheets’ten otomatik veri çekme */
-document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
-    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
-    fetch(url)
-    .then(r=>r.text())
-    .then(csv=>{
-        const wb = XLSX.read(csv, { type: 'string' });
+
+document.getElementById('btnFetchSheets').addEventListener('click', async ()=>{
+  try{
+    if (location.protocol === 'file:') {
+      alert('Google Sheets verisini yerel dosyadan (file://) çekerken CORS engeli olabilir. Dosyayı bir sunucu üzerinden (http/https) açın ya da Excel yüklemeyi kullanın.');
+    }
+    const defaultUrl = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
+    let url = localStorage.getItem('sheets_url') || defaultUrl;
+
+    async function fetchCsv(u){
+      const r = await fetch(u, {cache:'no-store'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return await r.text();
+    }
+    async function tryBoth(u){
+      try { return await fetchCsv(u); } catch(_){}
+      try {
+        const m = u.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        if(m){
+          const u2 = `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv&gid=0`;
+          return await fetchCsv(u2);
+        }
+      } catch(_){}
+      throw new Error('CSV indirilemedi.');
+    }
+
+    let csv;
+    try{
+      csv = await tryBoth(url);
+    }catch(e){
+      const pasted = prompt('Sheets CSV bağlantısı çalışmadı. Lütfen yayınlanmış CSV adresini yapıştırın:', url);
+      if(!pasted){ return; }
+      localStorage.setItem('sheets_url', pasted);
+      csv = await tryBoth(pasted);
+      url = pasted;
+    }
+
+    const wb = XLSX.read(csv, { type: 'string' });
+    const sheetName = wb.SheetNames[0];
+    if(!sheetName){ throw new Error('Sayfa bulunamadı'); }
+    const sheet = wb.Sheets[sheetName];
+
+    let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
+    let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
+
+    if(arr.length === 0){
+      const A = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
+      if(A.length){
+        const C=A[0].length, stat=Array.from({length:C},()=>({digits:0,text:0,price:0,date:0}));
+        const maxRows = Math.min(A.length, 300);
+        for(let i=1;i<maxRows;i++){
+          const r=A[i]||[];
+          for(let j=0;j<C;j++){
+            const v=r[j];
+            if(v===undefined||v===null||v==='') continue;
+            const s=String(v);
+            if(/^[0-9]{8,14}$/.test(s)||/e\+\d+$/i.test(s)) stat[j].digits++;
+            if(/[a-zA-ZğüşöçİıĞÜŞÖÇ]/.test(s)&&s.length>3) stat[j].text++;
+            if(parsePrice(v)>0) stat[j].price++;
+            if(parseExcelDate(v)) stat[j].date++;
+          }
+        }
+        const idxMax=k=>stat.map((x,i)=>({i,v:x[k]})).sort((a,b)=>b.v-a.v)[0]?.i??0;
+        const ci={barcode:idxMax('digits'),name:idxMax('text'),price:idxMax('price'),date:idxMax('date')};
+        const temp=[];
+        for(let i=1;i<A.length;i++){
+          const r=A[i]||[];
+          const bc=parseBarcode(r[ci.barcode]);
+          const nm=String(r[ci.name]||'').trim();
+          const pr=parsePrice(r[ci.price]);
+          const dt=parseExcelDate(r[ci.date]);
+          if(bc&&nm) temp.push({barcode:bc,name:nm,price:pr,priceDate:dt});
+        }
+        arr = temp;
+      }
+    }
+
+    window.PRODUCTS = PRODUCTS = arr;
+    badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? (PRODUCTS.length + ' ürün yüklendi (Sheets)') : 'Hiç ürün okunamadı'}`;
+    if(PRODUCTS.length > 0){ showToast('Veri yüklendi'); }
+    else { alert('Uygun satır bulunamadı. Başlık adlarını kontrol edin veya CSV’yi tekrar yayınlayın.'); }
+  }catch(err){
+    console.error(err);
+    alert('Google Sheets verisi okunamadı: ' + (err?.message || err));
+  }
+});
+
         try {
             const sheet = wb.Sheets[wb.SheetNames[0]];
             let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
@@ -271,6 +352,7 @@ function setCart(n){ CART=n; localStorage.setItem('etiket_cart',JSON.stringify(C
 setCart(CART);
 
 /* ===== EXCEL UPLOAD ===== */
+
 $('fileExcel').addEventListener('change', (ev)=>{
   const f=ev.target.files[0]; if(!f) return;
   const ext=(f.name.split('.').pop()||'').toLowerCase();
@@ -279,8 +361,59 @@ $('fileExcel').addEventListener('change', (ev)=>{
       const sheet=wb.Sheets[wb.SheetNames[0]];
       let rowsObj=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
       let arr=rowsObj.map(normalizeRow).filter(x=>x.barcode&&x.name);
+      if(arr.length<1){
+        const A=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+        if(A.length){
+          const C=A[0].length,stat=Array.from({length:C},()=>({digits:0,text:0,price:0,date:0}));
+          for(let i=1;i<Math.min(A.length,300);i++){
+            const r=A[i]||[];
+            for(let j=0;j<C;j++){
+              const v=r[j];
+              if(v===undefined||v===null||v==='')continue;
+              const s=String(v);
+              if(/^[0-9]{8,14}$/.test(s)||/e\+\d+$/i.test(s))stat[j].digits++;
+              if(/[a-zA-ZğüşöçİıĞÜŞÖÇ]/.test(s)&&s.length>3)stat[j].text++;
+              if(parsePrice(v)>0)stat[j].price++;
+              if(parseExcelDate(v))stat[j].date++;
+            }
+          }
+          const idxMax=k=>stat.map((x,i)=>({i,v:x[k]})).sort((a,b)=>b.v-a.v)[0]?.i??0;
+          const ci={barcode:idxMax('digits'),name:idxMax('text'),price:idxMax('price'),date:idxMax('date')};
+          const temp=[];
+          for(let i=1;i<A.length;i++){
+            const r=A[i]||[];
+            const bc=parseBarcode(r[ci.barcode]);
+            const nm=String(r[ci.name]||'').trim();
+            const pr=parsePrice(r[ci.price]);
+            const dt=parseExcelDate(r[ci.date]);
+            if(bc&&nm) temp.push({barcode:bc,name:nm,price:pr,priceDate:dt});
+          }
+          arr = temp;
+        }
+      }
+      window.PRODUCTS = PRODUCTS = arr;
+      badgeData.innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün yüklendi (Excel)':'Hiç ürün okunamadı'}`;
+      if(PRODUCTS.length>0) showToast('Veri yüklendi'); else alert('Uygun satır bulunamadı. Başlıkları kontrol edin.');
+    }catch(err){ console.error(err); alert('Excel/CSV okunamadı: ' + (err?.message||err)); }
+  };
+  try{
+    if(ext==='csv'){
+      const r=new FileReader();
+      r.onload=e=>{ const wb=XLSX.read(e.target.result,{type:'string'}); loadFromWorkbook(wb); };
+      r.onerror=e=>alert('CSV okunamadı.');
+      r.readAsText(f);
+    } else {
+      const r=new FileReader();
+      r.onload=e=>{ const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true}); loadFromWorkbook(wb); };
+      r.onerror=e=>alert('Dosya okunamadı.');
+      r.readAsArrayBuffer(f);
+    }
+  }catch(ex){ alert('Dosya okuma hatası: ' + (ex?.message||ex)); }
+});
+
+      let arr=rowsObj.map(normalizeRow).filter(x=>x.barcode&&x.name);
       if(arr.length<3){ const A=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''}); if(A.length){ const C=A[0].length,stat=Array.from({length:C},()=>({digits:0,text:0,price:0,date:0})); for(let i=1;i<Math.min(A.length,150);i++){const r=A[i]||[]; for(let j=0;j<C;j++){const v=r[j]; if(v===undefined||v===null||v==='')continue; const s=String(v); if(/^[0-9]{8,14}$/.test(s)||/e\+\d+$/i.test(s))stat[j].digits++; if(/[a-zA-ZğüşöçİıĞÜŞÖÇ]/.test(s)&&s.length>3)stat[j].text++; if(parsePrice(v)>0)stat[j].price++; if(parseExcelDate(v))stat[j].date++;}} const idxMax=k=>stat.map((x,i)=>({i,v:x[k]})).sort((a,b)=>b.v-a.v)[0]?.i??0; const ci={barcode:idxMax('digits'),name:idxMax('text'),price:idxMax('price'),date:idxMax('date')}; for(let i=1;i<A.length;i++){const r=A[i]||[]; const bc=parseBarcode(r[ci.barcode]); const nm=String(r[ci.name]||'').trim(); const pr=parsePrice(r[ci.price]); const dt=parseExcelDate(r[ci.date]); if(bc&&nm)arr.push({barcode:bc,name:nm,price:pr,priceDate:dt});}} }
-      PRODUCTS=arr; badgeData.innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün yüklendi (Excel)':'Hiç ürün okunamadı'}`; if(PRODUCTS.length>0) showToast('Veri yüklendi'); else alert('Uygun satır bulunamadı.');
+      PRODUCTS=arr; window.PRODUCTS = PRODUCTS; badgeData.innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün yüklendi (Excel)':'Hiç ürün okunamadı'}`; if(PRODUCTS.length>0) showToast('Veri yüklendi'); else alert('Uygun satır bulunamadı.');
     }catch(err){ console.error(err); alert('Excel/CSV okunamadı.'); }
   };
   if(ext==='csv'){ const r=new FileReader(); r.onload=e=>{ const wb=XLSX.read(e.target.result,{type:'string'}); loadFromWorkbook(wb); }; r.readAsText(f); }
@@ -311,6 +444,7 @@ function openProduct(p){
   $('btnCustom').onclick=()=>{ const q=parseInt(prompt('Kaç adet?','1')); if(q>0) addToCart(p,q,old); };
   $('btnCancel').onclick=()=>{ mdl.classList.remove('shown'); refocusAfterAction(true); };
 }
+window.openProduct = openProduct;
 function addToCart(p,qty,isOld){
   const idx = CART.findIndex(x => x.barcode === p.barcode);
   if (idx > -1) CART[idx].qty += qty;
