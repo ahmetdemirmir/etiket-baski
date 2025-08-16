@@ -7,106 +7,10 @@
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
-// ✅ Google Sheets’ten otomatik veri çekme
-document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
-    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
-    fetch(url)
-    .then(r=>r.text())
-    .then(csv=>{
-        const wb = XLSX.read(csv, { type: 'string' });
-        try {
-            const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
-            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
-            PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
-            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
-            else alert('Uygun satır bulunamadı.');
-        } catch(err) {
-            console.error(err);
-            alert('Google Sheets verisi okunamadı: ' + err);
-        }
-    })
-    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
-});
-
-</script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js">
-// ✅ Google Sheets’ten otomatik veri çekme
-document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
-    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
-    fetch(url)
-    .then(r=>r.text())
-    .then(csv=>{
-        const wb = XLSX.read(csv, { type: 'string' });
-        try {
-            const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
-            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
-            PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
-            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
-            else alert('Uygun satır bulunamadı.');
-        } catch(err) {
-            console.error(err);
-            alert('Google Sheets verisi okunamadı: ' + err);
-        }
-    })
-    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
-});
-
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
-// ✅ Google Sheets’ten otomatik veri çekme
-document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
-    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
-    fetch(url)
-    .then(r=>r.text())
-    .then(csv=>{
-        const wb = XLSX.read(csv, { type: 'string' });
-        try {
-            const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
-            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
-            PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
-            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
-            else alert('Uygun satır bulunamadı.');
-        } catch(err) {
-            console.error(err);
-            alert('Google Sheets verisi okunamadı: ' + err);
-        }
-    })
-    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
-});
-
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
-// ✅ Google Sheets’ten otomatik veri çekme
-document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
-    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
-    fetch(url)
-    .then(r=>r.text())
-    .then(csv=>{
-        const wb = XLSX.read(csv, { type: 'string' });
-        try {
-            const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
-            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
-            PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
-            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
-            else alert('Uygun satır bulunamadı.');
-        } catch(err) {
-            console.error(err);
-            alert('Google Sheets verisi okunamadı: ' + err);
-        }
-    })
-    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
-});
-
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
 :root{
@@ -303,6 +207,30 @@ function parseExcelDate(v){ if(!v&&v!==0)return null; if(v instanceof Date&&!isN
 function mapRowByKeys(row){ const nk={};Object.keys(row).forEach(k=>nk[normKey(k)]=k); const pick=(syns)=>{for(const s of syns){for(const k in nk){if(k===s||k.includes(s))return row[nk[k]];}} return undefined;}; const barcode=pick(['barkod','barkodno','barkodu','ean','ean13']); const name=pick(['stokadi','urunadi','adi','ad','stok','aciklama']); const price=pick(['magaza','magazasatis','magazasatisfiyati','magazafiyati','satisfiyati1','satisfiyat1','sf1','fiyat','perakendesatis']); const date=pick(['satisfiyati1degtar','satisfiyati1degtarihi','fiyatdegisikliktarihi','fiyatdegtarihi','fdtarihi','degisiktarihi','degistarihi','fiyatguncellemetarihi']); return {barcode,name,price,date}; }
 function normKey(s){return String(s||'').toLowerCase().replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');}
 function normalizeRow(r){ const m=mapRowByKeys(r); return { barcode:parseBarcode(m.barcode), name:String(m.name||'').trim(), price:parsePrice(m.price), priceDate:parseExcelDate(m.date) }; }
+
+// ✅ Google Sheets’ten otomatik veri çekme
+document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
+    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
+    fetch(url)
+    .then(r=>r.text())
+    .then(csv=>{
+        const wb = XLSX.read(csv, { type: 'string' });
+        try {
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
+            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
+            PRODUCTS = arr;
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
+            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
+            else alert('Uygun satır bulunamadı.');
+        } catch(err) {
+            console.error(err);
+            alert('Google Sheets verisi okunamadı: ' + err);
+        }
+    })
+    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
+});
+
 
 /* ===== CART ===== */
 function setCart(n){ CART=n; localStorage.setItem('etiket_cart',JSON.stringify(CART)); cartCount.textContent=CART.reduce((a,x)=>a+x.qty,0); }
@@ -594,30 +522,6 @@ async function makeOldListDoc(){
 })();
 
 })(); // IIFE
-
-// ✅ Google Sheets’ten otomatik veri çekme
-document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
-    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
-    fetch(url)
-    .then(r=>r.text())
-    .then(csv=>{
-        const wb = XLSX.read(csv, { type: 'string' });
-        try {
-            const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
-            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
-            PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
-            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
-            else alert('Uygun satır bulunamadı.');
-        } catch(err) {
-            console.error(err);
-            alert('Google Sheets verisi okunamadı: ' + err);
-        }
-    })
-    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
-});
-
 </script>
 </body>
 </html>
