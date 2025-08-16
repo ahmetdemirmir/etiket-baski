@@ -736,14 +736,14 @@ async function makeOldListDoc(){
 
 })(); // IIFE
 
+
 /* ===== KAMERA (iOS yalnız) — ayrı butonla çağrılır, Android akışına dokunmaz ===== */
 (function(){
   const SHEET_ID = 'camSheetIOS';
   let scanning=false, starting=false, rafId=null, stream=null, bdDetector=null;
-
+  let deadline=0, resumeAfterIOS=false, userClosedIOS=false;
   const $=id=>document.getElementById(id);
 
-  // Katman
   const sheetEl = document.createElement('div');
   sheetEl.id= SHEET_ID;
   sheetEl.innerHTML = '<style>#camSheetIOS{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:none}#camBoxIOS{position:absolute;left:50%;top:8%;transform:translateX(-50%);width:min(96vw,720px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden}#camHeadIOS{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb}#camMountIOS{position:relative;width:100%;height:380px;background:#000}#camMountIOS video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}#camFootIOS{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;background:#fafafa}</style><div id="camBoxIOS"><div id="camHeadIOS"><b>Kamera (iOS)</b><div><button id="camCloseIOS" class="btn">Kapat</button></div></div><div id="camMountIOS"><video id="camVideoIOS" autoplay playsinline muted></video></div><div id="camFootIOS"><button id="camStopIOS" class="btn">Durdur</button></div></div>';
@@ -762,6 +762,7 @@ async function makeOldListDoc(){
     return v;
   }
   function closeSheet(){ camSheet.style.display='none'; }
+  function openSheet(){ camSheet.style.display='block'; }
 
   async function pickRearDeviceId(){
     try{
@@ -799,10 +800,28 @@ async function makeOldListDoc(){
     try{ const v=getVideo(); if(v) v.srcObject=null; }catch(_){}
   }
 
+  function countOpenModals(){
+    const nodes=document.querySelectorAll('.modal');
+    let c=0;
+    nodes.forEach(n=>{ const cs=getComputedStyle(n); if(cs.display!=='none' && cs.visibility!=='hidden' && !n.hidden) c++; });
+    return c;
+  }
+  function tryAutoResume(){
+    if(!resumeAfterIOS || userClosedIOS) return;
+    if(countOpenModals()===0){
+      resumeAfterIOS=false;
+      setTimeout(()=>{ startIOS(); }, 250);
+    }
+  }
+  const mo1=new MutationObserver(tryAutoResume);
+  mo1.observe(document.body,{subtree:true, attributes:true, attributeFilter:['class','style','hidden']});
+  const mo2=new MutationObserver(tryAutoResume);
+  mo2.observe(document.body,{subtree:true, childList:true});
+
   async function startIOS(){
     if(starting||scanning) return;
-    starting=true;
-    camSheet.style.display='block';
+    starting=true; userClosedIOS=false;
+    openSheet();
     stopCamera();
     const v = replaceVideo();
 
@@ -822,39 +841,39 @@ async function makeOldListDoc(){
       return;
     }
 
-    // BarcodeDetector + canvas
+    // BarcodeDetector + yalnız EAN-13 / UPC-A
     let canBD = 'BarcodeDetector' in window;
     if(canBD){
       try{
         const fmts = await BarcodeDetector.getSupportedFormats();
-        const wanted = ['ean-13','ean-8','upc-a','upc-e','code-128','code-39'];
+        const wanted = ['ean-13','upc-a'];
         const use = fmts.filter(f=>wanted.includes(f));
         bdDetector = new BarcodeDetector({formats: use.length?use:undefined});
       }catch(_){ canBD=false; }
     }
 
+    // 1 sn agresif BD denemesi; sonra ZXing'e düş
     scanning=true; starting=false;
-
-    let deadline = Date.now()+5000; // 5 sn içinde sonuç yoksa ZXing
+    deadline = Date.now()+1000;
     const tick = async ()=>{
       if(!scanning) return;
       try{
-        let w=v.videoWidth||640, h=v.videoHeight||480;
-        if(w>0 && h>0){
-          off.width=w; off.height=h; offctx.drawImage(v,0,0,w,h);
-          if(bdDetector){
+        if(bdDetector){
+          const vv = getVideo();
+          const w = vv.videoWidth||640, h = vv.videoHeight||480;
+          if(w>0 && h>0){
+            off.width=w; off.height=h; offctx.drawImage(vv,0,0,w,h);
             const codes = await bdDetector.detect(off);
             if(codes && codes.length){
               let raw = (codes[0].rawValue ?? codes[0].value ?? '').toString();
               let m = raw.match(/\d{8,}/g); const code = m ? m.sort((a,b)=>b.length-a.length)[0] : raw;
-              onDetected(code); return;
+              return onDetected(code);
             }
           }
         }
       }catch(_){}
       if(Date.now()>deadline){
-        useZXing();
-        return;
+        return useZXing();
       }
       rafId = requestAnimationFrame(tick);
     };
@@ -863,14 +882,27 @@ async function makeOldListDoc(){
 
   async function useZXing(){
     if(!scanning) return;
-    cancelAnimationFrame(rafId); rafId=null;
+    try{ rafId&&cancelAnimationFrame(rafId); rafId=null; }catch(_){}
     try{
       if(!window.ZXingBrowser){
         const s=document.createElement('script'); s.src='https://unpkg.com/@zxing/browser@latest';
         await new Promise((res,rej)=>{ s.onload=res; s.onerror=rej; });
         document.head.appendChild(s);
       }
-      const reader = new window.ZXingBrowser.BrowserMultiFormatReader();
+      let reader;
+      try{
+        const ZX = window.ZXing;
+        if (ZX && ZX.DecodeHintType && ZX.BarcodeFormat){
+          const hints = new Map();
+          hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A]);
+          reader = new window.ZXingBrowser.BrowserMultiFormatReader(hints);
+        } else {
+          reader = new window.ZXingBrowser.BrowserMultiFormatReader();
+        }
+      }catch(_){
+        reader = new window.ZXingBrowser.BrowserMultiFormatReader();
+      }
+
       const v = getVideo();
       const tr = (v.srcObject && v.srcObject.getVideoTracks && v.srcObject.getVideoTracks()[0]) || null;
       const deviceId = tr && tr.getSettings && tr.getSettings().deviceId;
@@ -889,20 +921,35 @@ async function makeOldListDoc(){
   function isValidEAN13(code){ if(!/^\d{13}$/.test(code)) return false; let sum=0; for(let i=0;i<12;i++) sum += parseInt(code[i],10)*(i%2===0?1:3); return ((10-(sum%10))%10) === parseInt(code[12],10); }
   function onDetected(code){
     if(!code) return;
-    if(code.length===13 && !isValidEAN13(code)) return;
-    stopCamera(); closeSheet();
-    // Ürünü bulma (global fonksiyonlara güveniyoruz)
     const c = String(code).replace(/\D/g,'');
-    const p = (function findProductLocal(){
+    if(c.length===13 && !isValidEAN13(c)) return;
+    stopCamera(); closeSheet();
+    resumeAfterIOS = true;
+
+    (function(){
       const arr = window.PRODUCTS||[]; const norm=s=>String(s??'').replace(/\D/g,'');
-      const cc=norm(c);
-      let exact = arr.find(p=>norm(p.barcode)===cc);
-      if(exact) return exact;
-      if(cc.length===13){ const c12=cc.slice(1); const upc=arr.find(p=>norm(p.barcode).length===12 && norm(p.barcode)===c12); if(upc) return upc; }
-      if(cc.length===12){ const ean=arr.find(p=>norm(p.barcode).length===13 && norm(p.barcode).slice(1)===cc); if(ean) return ean; }
-      const suf=arr.find(p=>{const pb=norm(p.barcode); return pb.length>=8 && cc.length>=8 && (pb.endsWith(cc)||cc.endsWith(pb));});
-      return suf||null;
+      let p = arr.find(x=>norm(x.barcode)===c);
+      if(!p && c.length===13){ const c12=c.slice(1); p = arr.find(x=>norm(x.barcode).length===12 && norm(x.barcode)===c12); }
+      if(!p && c.length===12){ p = arr.find(x=>norm(x.barcode).length===13 && norm(x.barcode).slice(1)===c); }
+      if(!p){ p = arr.find(x=>{const pb=norm(x.barcode); return pb.length>=8 && c.length>=8 && (pb.endsWith(c)||c.endsWith(pb));}); }
+      if(p){ window.openProduct(p); } else {
+        const inp = $('inpBarcode'); if(inp){ inp.value = c.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); }
+      }
     })();
+
+    try{ if(navigator.vibrate) navigator.vibrate(35); }catch(_){}
+  }
+
+  document.getElementById('btnCamIOS').addEventListener('click', ()=>{ startIOS(); });
+  document.getElementById('camCloseIOS').addEventListener('click', ()=>{ userClosedIOS=true; stopCamera(); closeSheet(); resumeAfterIOS=false; });
+  document.getElementById('camStopIOS').addEventListener('click', ()=>{ stopCamera(); });
+
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden){ stopCamera(); }
+    else{ tryAutoResume(); }
+  });
+})();
+
     if(p){ window.openProduct(p); } else {
       const inp = $('inpBarcode'); if(inp){ inp.value = c.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); }
     }
