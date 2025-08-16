@@ -93,6 +93,9 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
         <button id="btnCam" class="btn primary" style="font-size:16px">
           <i class="fa-solid fa-camera"></i> Kamera Aç
         </button>
+        <button id="btnCamIOS" class="btn neutral" style="font-size:16px">
+          <i class="fa-brands fa-apple"></i> Kamera Aç (iOS)
+        </button>
       </div>
     </div>
 
@@ -732,6 +735,186 @@ async function makeOldListDoc(){
 })();
 
 })(); // IIFE
+
+/* ===== KAMERA (iOS yalnız) — ayrı butonla çağrılır, Android akışına dokunmaz ===== */
+(function(){
+  const SHEET_ID = 'camSheetIOS';
+  let scanning=false, starting=false, rafId=null, stream=null, bdDetector=null;
+
+  const $=id=>document.getElementById(id);
+
+  // Katman
+  const sheetEl = document.createElement('div');
+  sheetEl.id= SHEET_ID;
+  sheetEl.innerHTML = '<style>#camSheetIOS{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:none}#camBoxIOS{position:absolute;left:50%;top:8%;transform:translateX(-50%);width:min(96vw,720px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden}#camHeadIOS{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb}#camMountIOS{position:relative;width:100%;height:380px;background:#000}#camMountIOS video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}#camFootIOS{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;background:#fafafa}</style><div id="camBoxIOS"><div id="camHeadIOS"><b>Kamera (iOS)</b><div><button id="camCloseIOS" class="btn">Kapat</button></div></div><div id="camMountIOS"><video id="camVideoIOS" autoplay playsinline muted></video></div><div id="camFootIOS"><button id="camStopIOS" class="btn">Durdur</button></div></div>';
+  document.body.appendChild(sheetEl);
+  const camSheet = sheetEl;
+  const camMount = document.getElementById('camMountIOS');
+  const off = document.createElement('canvas');
+  const offctx = off.getContext('2d', { willReadFrequently: true });
+
+  function getVideo(){ return document.getElementById('camVideoIOS'); }
+  function replaceVideo(){
+    const old = getVideo();
+    const v = document.createElement('video');
+    v.id='camVideoIOS'; v.autoplay=true; v.playsInline=true; v.muted=true;
+    if(old && old.parentNode) old.parentNode.replaceChild(v, old); else camMount.appendChild(v);
+    return v;
+  }
+  function closeSheet(){ camSheet.style.display='none'; }
+
+  async function pickRearDeviceId(){
+    try{
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d=>d.kind==='videoinput');
+      if(!cams.length) return null;
+      let rear = cams.find(d => /back|rear|environment/i.test(d.label));
+      return (rear||cams[cams.length-1]).deviceId;
+    }catch(_){ return null; }
+  }
+  async function getStreamVariant(i){
+    const rear = await pickRearDeviceId();
+    const variants = [
+      { video: rear ? {deviceId:{exact:rear}, width:{ideal:1920}, height:{ideal:1080}, facingMode:{ideal:'environment'}} : {facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}} },
+      { video: rear ? {deviceId:{exact:rear}, width:{ideal:1280}, height:{ideal:720}, facingMode:{ideal:'environment'}} : {facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}} },
+      { video: rear ? {deviceId:{exact:rear}, facingMode:{ideal:'environment'}} : {facingMode:{ideal:'environment'}} },
+      { video: true }
+    ];
+    return navigator.mediaDevices.getUserMedia(variants[Math.min(i, variants.length-1)]);
+  }
+  async function waitForPlaying(video, timeout=1500){
+    if(video.readyState >= 2) return;
+    await new Promise((res)=>{
+      let done=false;
+      const ok=()=>{ if(done) return; done=true; cleanup(); res(); };
+      const tid=setTimeout(ok, timeout);
+      const cleanup=()=>{ video.removeEventListener('loadeddata', ok); clearTimeout(tid); };
+      video.addEventListener('loadeddata', ok);
+    });
+  }
+  function stopCamera(){
+    scanning=false;
+    try{ rafId&&cancelAnimationFrame(rafId); rafId=null; }catch(_){}
+    try{ if(stream){ stream.getTracks().forEach(t=>t.stop()); } }catch(_){}
+    try{ const v=getVideo(); if(v) v.srcObject=null; }catch(_){}
+  }
+
+  async function startIOS(){
+    if(starting||scanning) return;
+    starting=true;
+    camSheet.style.display='block';
+    stopCamera();
+    const v = replaceVideo();
+
+    let ok=false, lastErr=null;
+    for(let i=0;i<4;i++){
+      try{
+        stream = await getStreamVariant(i);
+        v.srcObject = stream;
+        await v.play().catch(()=>{});
+        await waitForPlaying(v, 1500);
+        ok=true; break;
+      }catch(e){ lastErr=e; }
+    }
+    if(!ok){
+      starting=false; closeSheet();
+      alert('Kamera açılamadı (iOS): '+(lastErr?.message||lastErr||'bilinmeyen hata'));
+      return;
+    }
+
+    // BarcodeDetector + canvas
+    let canBD = 'BarcodeDetector' in window;
+    if(canBD){
+      try{
+        const fmts = await BarcodeDetector.getSupportedFormats();
+        const wanted = ['ean-13','ean-8','upc-a','upc-e','code-128','code-39'];
+        const use = fmts.filter(f=>wanted.includes(f));
+        bdDetector = new BarcodeDetector({formats: use.length?use:undefined});
+      }catch(_){ canBD=false; }
+    }
+
+    scanning=true; starting=false;
+
+    let deadline = Date.now()+5000; // 5 sn içinde sonuç yoksa ZXing
+    const tick = async ()=>{
+      if(!scanning) return;
+      try{
+        let w=v.videoWidth||640, h=v.videoHeight||480;
+        if(w>0 && h>0){
+          off.width=w; off.height=h; offctx.drawImage(v,0,0,w,h);
+          if(bdDetector){
+            const codes = await bdDetector.detect(off);
+            if(codes && codes.length){
+              let raw = (codes[0].rawValue ?? codes[0].value ?? '').toString();
+              let m = raw.match(/\d{8,}/g); const code = m ? m.sort((a,b)=>b.length-a.length)[0] : raw;
+              onDetected(code); return;
+            }
+          }
+        }
+      }catch(_){}
+      if(Date.now()>deadline){
+        useZXing();
+        return;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }
+
+  async function useZXing(){
+    if(!scanning) return;
+    cancelAnimationFrame(rafId); rafId=null;
+    try{
+      if(!window.ZXingBrowser){
+        const s=document.createElement('script'); s.src='https://unpkg.com/@zxing/browser@latest';
+        await new Promise((res,rej)=>{ s.onload=res; s.onerror=rej; });
+        document.head.appendChild(s);
+      }
+      const reader = new window.ZXingBrowser.BrowserMultiFormatReader();
+      const v = getVideo();
+      const tr = (v.srcObject && v.srcObject.getVideoTracks && v.srcObject.getVideoTracks()[0]) || null;
+      const deviceId = tr && tr.getSettings && tr.getSettings().deviceId;
+      await reader.decodeFromVideoDevice(deviceId||undefined, 'camVideoIOS', (result, err, controls)=>{
+        if(result && result.getText){
+          const code = (result.getText()||'').toString();
+          if(code){ controls.stop(); onDetected(code); }
+        }
+      });
+    }catch(e){
+      alert('ZXing açılamadı: '+e);
+      closeSheet();
+    }
+  }
+
+  function isValidEAN13(code){ if(!/^\d{13}$/.test(code)) return false; let sum=0; for(let i=0;i<12;i++) sum += parseInt(code[i],10)*(i%2===0?1:3); return ((10-(sum%10))%10) === parseInt(code[12],10); }
+  function onDetected(code){
+    if(!code) return;
+    if(code.length===13 && !isValidEAN13(code)) return;
+    stopCamera(); closeSheet();
+    // Ürünü bulma (global fonksiyonlara güveniyoruz)
+    const c = String(code).replace(/\D/g,'');
+    const p = (function findProductLocal(){
+      const arr = window.PRODUCTS||[]; const norm=s=>String(s??'').replace(/\D/g,'');
+      const cc=norm(c);
+      let exact = arr.find(p=>norm(p.barcode)===cc);
+      if(exact) return exact;
+      if(cc.length===13){ const c12=cc.slice(1); const upc=arr.find(p=>norm(p.barcode).length===12 && norm(p.barcode)===c12); if(upc) return upc; }
+      if(cc.length===12){ const ean=arr.find(p=>norm(p.barcode).length===13 && norm(p.barcode).slice(1)===cc); if(ean) return ean; }
+      const suf=arr.find(p=>{const pb=norm(p.barcode); return pb.length>=8 && cc.length>=8 && (pb.endsWith(cc)||cc.endsWith(pb));});
+      return suf||null;
+    })();
+    if(p){ window.openProduct(p); } else {
+      const inp = $('inpBarcode'); if(inp){ inp.value = c.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); }
+    }
+    try{ if(navigator.vibrate) navigator.vibrate(35); }catch(_){}
+  }
+
+  // Buton: iOS
+  document.getElementById('btnCamIOS').addEventListener('click', startIOS);
+  document.getElementById('camCloseIOS').addEventListener('click', ()=>{ stopCamera(); closeSheet(); });
+  document.getElementById('camStopIOS').addEventListener('click', ()=>{ stopCamera(); });
+})();
+
 </script>
 </body>
 </html>
