@@ -8,102 +8,102 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
-// ✅ OneDrive’dan otomatik veri çekme
-document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
-    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+// ✅ Google Sheets’ten otomatik veri çekme
+document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
+    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
     fetch(url)
-    .then(r=>r.arrayBuffer())
-    .then(buf=>{
-        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+    .then(r=>r.text())
+    .then(csv=>{
+        const wb = XLSX.read(csv, { type: 'string' });
         try {
             const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
             let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
             PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
-            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
+            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
             else alert('Uygun satır bulunamadı.');
-        } catch(err){
+        } catch(err) {
             console.error(err);
-            alert('OneDrive verisi okunamadı.');
+            alert('Google Sheets verisi okunamadı: ' + err);
         }
     })
-    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
 });
 
 </script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js">
-// ✅ OneDrive’dan otomatik veri çekme
-document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
-    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+// ✅ Google Sheets’ten otomatik veri çekme
+document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
+    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
     fetch(url)
-    .then(r=>r.arrayBuffer())
-    .then(buf=>{
-        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+    .then(r=>r.text())
+    .then(csv=>{
+        const wb = XLSX.read(csv, { type: 'string' });
         try {
             const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
             let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
             PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
-            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
+            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
             else alert('Uygun satır bulunamadı.');
-        } catch(err){
+        } catch(err) {
             console.error(err);
-            alert('OneDrive verisi okunamadı.');
+            alert('Google Sheets verisi okunamadı: ' + err);
         }
     })
-    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
 });
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
-// ✅ OneDrive’dan otomatik veri çekme
-document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
-    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+// ✅ Google Sheets’ten otomatik veri çekme
+document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
+    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
     fetch(url)
-    .then(r=>r.arrayBuffer())
-    .then(buf=>{
-        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+    .then(r=>r.text())
+    .then(csv=>{
+        const wb = XLSX.read(csv, { type: 'string' });
         try {
             const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
             let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
             PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
-            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
+            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
             else alert('Uygun satır bulunamadı.');
-        } catch(err){
+        } catch(err) {
             console.error(err);
-            alert('OneDrive verisi okunamadı.');
+            alert('Google Sheets verisi okunamadı: ' + err);
         }
     })
-    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
 });
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
-// ✅ OneDrive’dan otomatik veri çekme
-document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
-    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+// ✅ Google Sheets’ten otomatik veri çekme
+document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
+    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
     fetch(url)
-    .then(r=>r.arrayBuffer())
-    .then(buf=>{
-        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+    .then(r=>r.text())
+    .then(csv=>{
+        const wb = XLSX.read(csv, { type: 'string' });
         try {
             const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
             let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
             PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
-            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
+            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
             else alert('Uygun satır bulunamadı.');
-        } catch(err){
+        } catch(err) {
             console.error(err);
-            alert('OneDrive verisi okunamadı.');
+            alert('Google Sheets verisi okunamadı: ' + err);
         }
     })
-    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
 });
 
 </script>
@@ -196,7 +196,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off">
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off">
       <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
-<button id="btnFetchOneDrive" class="btn primary"><i class="fa-solid fa-cloud-download"></i> OneDrive'dan Çek</button>
+<button id="btnFetchSheets" class="btn primary"><i class="fa-solid fa-cloud-download"></i> Google Sheets'ten Çek</button>
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; **KAMERA ile okutunca ürün popup'ı direkt açılır**.</small>
   </div>
@@ -595,27 +595,27 @@ async function makeOldListDoc(){
 
 })(); // IIFE
 
-// ✅ OneDrive’dan otomatik veri çekme
-document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
-    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+// ✅ Google Sheets’ten otomatik veri çekme
+document.getElementById('btnFetchSheets').addEventListener('click', ()=>{
+    const url = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
     fetch(url)
-    .then(r=>r.arrayBuffer())
-    .then(buf=>{
-        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+    .then(r=>r.text())
+    .then(csv=>{
+        const wb = XLSX.read(csv, { type: 'string' });
         try {
             const sheet = wb.Sheets[wb.SheetNames[0]];
-            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let rowsObj = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
             let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
             PRODUCTS = arr;
-            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
-            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length > 0 ? PRODUCTS.length + ' ürün yüklendi (Sheets)' : 'Hiç ürün okunamadı'}`;
+            if (PRODUCTS.length > 0) showToast('Veri yüklendi');
             else alert('Uygun satır bulunamadı.');
-        } catch(err){
+        } catch(err) {
             console.error(err);
-            alert('OneDrive verisi okunamadı.');
+            alert('Google Sheets verisi okunamadı: ' + err);
         }
     })
-    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+    .catch(err=>alert('Google Sheets’den veri alınamadı: ' + err));
 });
 
 </script>
