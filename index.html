@@ -7,10 +7,106 @@
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
+// ✅ OneDrive’dan otomatik veri çekme
+document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
+    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+    fetch(url)
+    .then(r=>r.arrayBuffer())
+    .then(buf=>{
+        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+        try {
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
+            PRODUCTS = arr;
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
+            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            else alert('Uygun satır bulunamadı.');
+        } catch(err){
+            console.error(err);
+            alert('OneDrive verisi okunamadı.');
+        }
+    })
+    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+});
+
+</script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js">
+// ✅ OneDrive’dan otomatik veri çekme
+document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
+    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+    fetch(url)
+    .then(r=>r.arrayBuffer())
+    .then(buf=>{
+        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+        try {
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
+            PRODUCTS = arr;
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
+            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            else alert('Uygun satır bulunamadı.');
+        } catch(err){
+            console.error(err);
+            alert('OneDrive verisi okunamadı.');
+        }
+    })
+    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+});
+
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+// ✅ OneDrive’dan otomatik veri çekme
+document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
+    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+    fetch(url)
+    .then(r=>r.arrayBuffer())
+    .then(buf=>{
+        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+        try {
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
+            PRODUCTS = arr;
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
+            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            else alert('Uygun satır bulunamadı.');
+        } catch(err){
+            console.error(err);
+            alert('OneDrive verisi okunamadı.');
+        }
+    })
+    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+});
+
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+// ✅ OneDrive’dan otomatik veri çekme
+document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
+    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+    fetch(url)
+    .then(r=>r.arrayBuffer())
+    .then(buf=>{
+        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+        try {
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
+            PRODUCTS = arr;
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
+            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            else alert('Uygun satır bulunamadı.');
+        } catch(err){
+            console.error(err);
+            alert('OneDrive verisi okunamadı.');
+        }
+    })
+    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+});
+
+</script>
 
 <style>
 :root{
@@ -93,7 +189,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
         <button id="btnCam" class="btn primary" style="font-size:16px">
           <i class="fa-solid fa-camera"></i> Kamera Aç
         </button>
-        <button id="btnCloud" class="btn primary" style="font-size:16px"><i class="fa-solid fa-cloud-arrow-down"></i> Güncel veriyi çek</button>
       </div>
     </div>
 
@@ -101,6 +196,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off">
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off">
       <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv">
+<button id="btnFetchOneDrive" class="btn primary"><i class="fa-solid fa-cloud-download"></i> OneDrive'dan Çek</button>
     </div>
     <small class="hint">Excel yükleyin, barkodun son 6 hanesiyle veya ürün adıyla arayın; **KAMERA ile okutunca ürün popup'ı direkt açılır**.</small>
   </div>
@@ -497,89 +593,31 @@ async function makeOldListDoc(){
   $('btnCam').addEventListener('click', ()=> startCamera());
 })();
 
-
-  // Bulut CSV'den gelen ürünler için dinleyici
-  document.addEventListener('cloud:products', (ev)=>{
-    try{
-      const arr = Array.isArray(ev.detail) ? ev.detail : [];
-      if(!arr.length) return;
-      PRODUCTS = arr;
-      const bd = document.getElementById('badgeData');
-      if(bd) bd.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (Bulut/CSV)`;
-      if(typeof showToast==='function') showToast('Güncel veri çekildi (Bulut/CSV)');
-      if(typeof refocusAfterAction==='function') refocusAfterAction(true);
-    }catch(e){ console.error('cloud:products apply error', e); }
-  });
-
 })(); // IIFE
+
+// ✅ OneDrive’dan otomatik veri çekme
+document.getElementById('btnFetchOneDrive').addEventListener('click', ()=>{
+    const url = 'https://onedrive.live.com/download?resid=813a94bb14b22e19!176&authkey=!EcsuYi_1KQ9HuCh';
+    fetch(url)
+    .then(r=>r.arrayBuffer())
+    .then(buf=>{
+        const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+        try {
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            let rowsObj = XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
+            let arr = rowsObj.map(normalizeRow).filter(x=>x.barcode && x.name);
+            PRODUCTS = arr;
+            badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0 ? PRODUCTS.length+' ürün yüklendi (OneDrive)' : 'Hiç ürün okunamadı'}`;
+            if(PRODUCTS.length>0) showToast('Veri yüklendi');
+            else alert('Uygun satır bulunamadı.');
+        } catch(err){
+            console.error(err);
+            alert('OneDrive verisi okunamadı.');
+        }
+    })
+    .catch(err=>alert('OneDrive’dan veri alınamadı: '+err));
+});
+
 </script>
-
-<script>
-// === Cloud CSV Fetch (self-contained) ===
-(function() {
-  const CLOUD_URL = "https://script.google.com/macros/s/AKfycbwxgmbfrB9K-_K622uthV3BsQjzDcWeIWZXIUNKLtwqlQhQzpKXOQg_--Z_DBYqlTY7/exec";
-  function parseCSV(str){
-    const semi=(str.match(/;/g)||[]).length, comma=(str.match(/,/g)||[]).length;
-    const delim = semi>comma ? ';' : ',';
-    const out=[]; let row=[]; let i=0; let inQ=false; let f='';
-    while(i<str.length){
-      const ch=str[i];
-      if(ch === '"'){ if(inQ && str[i+1] === '"'){ f+='"'; i+=2; continue; } inQ=!inQ; i++; continue; }
-      if(!inQ && (ch=='\n' || ch=='\r')){ row.push(f); f=''; if(row.length>1||row[0]!== '') out.push(row); row=[]; if(ch=='\r' && str[i+1]=='\n') i+=2; else i++; continue; }
-      if(!inQ && ch===delim){ row.push(f); f=''; i++; continue; }
-      f+=ch; i++;
-    }
-    row.push(f); if(row.length>1||row[0]!== '') out.push(row); return out;
-  }
-  const normKey = (k)=>{
-    if(!k) return ''; let s=String(k).toLowerCase();
-    const map={'ğ':'g','ü':'u','ş':'s','ı':'i','i':'i','ö':'o','ç':'c'};
-    s=s.replace(/[ğüşıiöç]/g, ch=>map[ch]||ch).replace(/\s+/g,' ').trim().replace(/[^a-z0-9 ]+/g,' ');
-    return s;
-  };
-  const pickLocal = (dict, arr)=>{ const keys=Object.keys(dict||{});
-    for(const c of arr){ const ck = normKey(c); for(const k of keys){ const kn = normKey(k); if(kn===ck || kn.includes(ck)) return dict[k]; } }
-    return null;
-  };
-  const toBarcode=(v)=>{ if(v==null) return ''; let s=String(v).trim().replace(',', '.'); if(/e\+\d+$/i.test(s)){ try{ const parts=s.toLowerCase().split('e+'); const base=parts[0].replace('.',''); const pow=parseInt(parts[1]||'0',10); const decimals=(parts[0].split('.')[1]||'').length; const zeros=Math.max(pow-decimals,0); s=base+'0'.repeat(zeros); }catch(_ ){} } return s.replace(/\D/g,''); };
-  const toPrice=(v)=>{ if(v==null||v==='') return null; let s=String(v).toLowerCase().replace(/tl|try|₺|\s/g,''); if(s.includes('.')&&s.includes(',')) s=s.replace(/\./g,'').replace(',', '.'); else if(s.includes(',')) s=s.replace(',', '.'); s=s.replace(/(\d)\.(?=\d{3}(\D|$))/g,'$1'); const n=parseFloat(s); return isNaN(n)?null:n; };
-  const toDateYMD=(v)=>{ if(!v && v!==0) return null; if(v instanceof Date) return v.toISOString().slice(0,10); const s=String(v).trim(); const m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/); if(m){ const dd=+m[1], mm=+m[2], yy=+m[3]; return new Date(Date.UTC(yy,mm-1,dd)).toISOString().slice(0,10); } return s||null; };
-
-  async function fetchCloudCSVOnly(){
-    const btn = document.getElementById('btnCloud');
-    try{
-      if(btn) btn.disabled=true;
-      let res = await fetch(CLOUD_URL + "?t=" + Date.now(), {cache:"no-store"});
-      let text = await res.text();
-      if(text.charCodeAt(0)===0xFEFF) text = text.slice(1);
-      text = text.replace(/\r\n/g,'\n');
-      const rows = parseCSV(text);
-      if(!rows || rows.length<2){ alert("CSV boş/okunamadı."); return; }
-      const header = rows[0];
-      const items = rows.slice(1).map(r=>{ const o={}; for(let j=0;j<header.length;j++) o[header[j]] = r[j]||''; return o; });
-      const products = [];
-      for(const o of items){
-        const barcode = toBarcode(pickLocal(o, ['Barkodu','Barkod','Barkod No','EAN','EAN13']));
-        const name    = String(pickLocal(o, ['Stok Adı','Ürün Adı','Ad','Açıklama'])||'').trim();
-        const price   = toPrice(pickLocal(o, ['MAĞAZA','Mağaza','Satış Fiyatı 1','Satış Fiyatı 1 (KDV Dahil)','Fiyat']));
-        const pdate   = toDateYMD(pickLocal(o, ['Satış Fiyatı 1 Değ. Tar.','Fiyat Değişiklik Tarihi','Değişiklik Tarihi','FD']));
-        if(barcode && name) products.push({ barcode: barcode, name: name, price: price, priceDate: pdate });
-      }
-      if(!products.length){ alert("CSV okundu ama alanlar eşleşmedi."); return; }
-      document.dispatchEvent(new CustomEvent('cloud:products', {detail: products}));
-      const bd = document.getElementById('badgeData'); if(bd) bd.innerHTML = '<i class="fa-solid fa-database"></i> ' + products.length + ' ürün yüklendi (Bulut/CSV)';
-      if(typeof showToast==='function') showToast('Güncel veri çekildi (CSV)');
-      if(typeof refocusAfterAction==='function') refocusAfterAction(true);
-    }catch(e){ alert('CSV çekme hatası: ' + e.message); }
-    finally{ if(btn) btn.disabled=false; }
-  }
-
-  document.addEventListener('DOMContentLoaded', function(){
-    const b = document.getElementById('btnCloud');
-    if(b) b.addEventListener('click', fetchCloudCSVOnly);
-  });
-})();
-</script>
-
 </body>
 </html>
