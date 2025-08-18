@@ -1,50 +1,214 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <title>Etiket Sistemi</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Etiket Sistemi — Tam Index (Yazdır Fix)</title>
+  <style>
+    :root{--line:#e5e7eb;--ink:#0f172a;--bg:#f8fafc;--primary:#16a34a;}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Arial,sans-serif}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:#fff;border-bottom:1px solid var(--line)}
+    h1{font-size:16px;margin:0}
+    .wrap{max-width:1000px;margin:0 auto;padding:16px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .btn{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;cursor:pointer;font-weight:700}
+    .btn.primary{background:linear-gradient(90deg,#22c55e,#16a34a);color:#fff;border:none}
+    .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(0,0,0,.05)}
+    #cartTable{width:100%;border-collapse:collapse;margin-top:10px}
+    #cartTable th,#cartTable td{border-bottom:1px solid var(--line);padding:8px;text-align:left;font-size:14px}
+    #cartTable th{background:#f1f5f9}
+    .mini{color:#64748b;font-size:12px}
+  </style>
 </head>
 <body>
-  <h2>Sepet Test</h2>
-  <button id="btnPrint">Yazdır</button>
+<header>
+  <h1>Etiket Sistemi — Yazdır (Stabil 4×7 Grid)</h1>
+  <div class="row">
+    <input id="fileCart" type="file" accept=".json" class="btn" />
+    <button id="btnPrint" class="btn primary">🖨️ Yazdır (PDF)</button>
+  </div>
+</header>
 
-  <script>
-    const { jsPDF } = window.jspdf;
+<div class="wrap">
+  <div class="card">
+    <div class="mini">Mevcut sayfanda zaten <b>CART</b> değişkeni varsa <i>dokunulmaz</i>. Yoksa test için örnek sepet yüklenir / JSON seçebilirsin.</div>
+    <table id="cartTable">
+      <thead><tr><th>Ad</th><th>Barkod</th><th>Fiyat</th><th>Adet</th></tr></thead>
+      <tbody id="cartBody"></tbody>
+    </table>
+  </div>
+</div>
 
-    // Örnek sepet
-    let CART = [
-      { barkod: "1234567890123", isim: "Pilot Kalem", fiyat: "45.90", fd: "2025-08-01" },
-      { barkod: "9876543210987", isim: "Defter A4", fiyat: "32.50", fd: "2025-08-15" },
-      { barkod: "3216549870123", isim: "Silgi", fiyat: "12.00", fd: "2025-08-16" }
-    ];
+<!-- Gizli sahne -->
+<div id="stage" style="position:fixed;left:-9999px;top:-9999px"></div>
 
-    function generateLabelsPDF(cart) {
-      if (!cart || cart.length === 0) {
-        alert("Sepet boş!");
-        return;
+<script>
+// ================== Dinamik kütüphane yükleyici ==================
+async function loadScript(src){
+  return new Promise((res, rej)=>{
+    const s=document.createElement('script');
+    s.src=src; s.async=true; s.crossOrigin="anonymous";
+    s.onload=()=>res(true);
+    s.onerror=()=>rej(new Error('Yüklenemedi: '+src));
+    document.head.appendChild(s);
+  });
+}
+async function ensureLibs(){
+  if(!(window.jspdf && window.jspdf.jsPDF)){
+    try{ await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'); }
+    catch(e){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'); }
+  }
+  if(typeof window.html2canvas!=='function'){
+    try{ await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'); }
+    catch(e){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'); }
+  }
+  if(typeof window.JsBarcode!=='function'){
+    try{ await loadScript('https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js'); }
+    catch(e){ await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js'); }
+  }
+}
+</script>
+
+<script>
+// ================== Sepet (global CART varsa kullan) ==================
+if(!Array.isArray(window.CART)){
+  window.CART = [
+    { name:"Pilot V5 Kalem Siyah", barcode:"4902505080115", price:89.9, qty:3 },
+    { name:"Faber-Castell Silgi", barcode:"8690615210001", price:19.5, qty:5 },
+    { name:"A4 Fotokopi Kağıdı 80gr", barcode:"8690000000003", price:179.0, qty:2 }
+  ];
+}
+
+// JSON içe aktar
+document.getElementById('fileCart').addEventListener('change', (ev)=>{
+  const f = ev.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = e=>{
+    try{
+      const arr = JSON.parse(e.target.result);
+      if(Array.isArray(arr)){
+        window.CART = arr.map(x=>({ 
+          name: x.name||x.isim||x.stokadi||x.StokAdi||'',
+          barcode: String(x.barcode||x.barkod||x.Barkod||'').replace(/\D/g,''),
+          price: parseFloat(x.price||x.fiyat||x.Fiyat||0)||0,
+          qty: parseInt(x.qty||x.adet||x.Adet||1,10)
+        }));
+        renderCart();
+      }else{
+        alert('JSON dizi formatında olmalı.');
       }
-      const doc = new jsPDF();
-      let x = 10, y = 20;
-      let perPage = 28, counter = 0;
+    }catch(err){ alert('JSON okunamadı: '+err); }
+  };
+  r.readAsText(f, 'utf-8');
+});
 
-      cart.forEach((p, idx) => {
-        doc.text(`${p.isim} (${p.barkod}) - ₺${p.fiyat} - FD:${p.fd}`, x, y);
-        y += 10;
-        counter++;
-        if (counter % perPage === 0 && idx < cart.length - 1) {
-          doc.addPage();
-          y = 20;
-        }
-      });
+function renderCart(){
+  const tb = document.getElementById('cartBody');
+  tb.innerHTML='';
+  let total=0;
+  (window.CART||[]).forEach(it=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${it.name||''}</td>
+                    <td>${it.barcode||''}</td>
+                    <td>${(new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'})).format(parseFloat(it.price||0)||0)}</td>
+                    <td>${parseInt(it.qty||1,10)}</td>`;
+    tb.appendChild(tr);
+    total += parseInt(it.qty||1,10);
+  });
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td colspan="4" class="mini">Toplam etiket: <b>${total}</b></td>`;
+  tb.appendChild(tr);
+}
+renderCart();
+</script>
 
-      doc.save("etiketler.pdf");
+<script>
+// ================== Stabil PDF Motoru (4×7 grid) ==================
+async function generateLabelsPDF(cartItems) {
+  await ensureLibs();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF("p","mm","a4");
+
+  const perRow=4, perCol=7, perPage=perRow*perCol;
+  const cellW=65, cellH=35, gap=5, marginX=10, marginY=10;
+
+  // Adetlere göre genişlet
+  const labels=[];
+  (cartItems||[]).forEach(it=>{
+    const q = Math.max(1, parseInt(it.qty||1,10));
+    for(let i=0;i<q;i++) labels.push(it);
+  });
+
+  const stage = document.getElementById('stage');
+  stage.innerHTML='';
+
+  let printed=0, onPage=0, x=marginX, y=marginY;
+  for(let i=0;i<labels.length;i++){
+    const it = labels[i];
+    const card = document.createElement('div');
+    card.style.width=cellW+'mm'; card.style.height=cellH+'mm';
+    card.style.boxSizing='border-box'; card.style.padding='2mm';
+    card.style.border='1px solid #e5e7eb'; card.style.borderRadius='6px';
+    card.style.background='#fff'; card.style.fontFamily='Arial,Helvetica,sans-serif';
+    card.style.display='flex'; card.style.flexDirection='column'; card.style.justifyContent='space-between';
+
+    const top = document.createElement('div');
+    top.style.fontSize='10px'; top.style.fontWeight='700'; top.style.lineHeight='1.2';
+    top.textContent = it.name||'';
+
+    const mid = document.createElement('div');
+    mid.style.display='flex'; mid.style.alignItems='center'; mid.style.justifyContent='space-between';
+
+    const price = document.createElement('div');
+    price.style.fontSize='12px'; price.style.fontWeight='800';
+    try{
+      price.textContent=(new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2})).format(parseFloat(it.price||0)||0);
+    }catch(e){ price.textContent=(it.price||0)+' ₺'; }
+
+    const cvs = document.createElement('canvas');
+    try{
+      const bc = String(it.barcode||'').replace(/\D/g,'');
+      const fmt = (/^\d{13}$/.test(bc))?'EAN13':'CODE128';
+      JsBarcode(cvs, bc, { format:fmt, height:28, width:1.6, displayValue:true, fontSize:9, margin:0 });
+    }catch(e){}
+    const img = document.createElement('img');
+    img.src = cvs.toDataURL('image/png'); img.style.height='28px'; img.style.objectFit='contain';
+
+    mid.appendChild(price); mid.appendChild(img);
+    card.appendChild(top); card.appendChild(mid);
+    stage.appendChild(card);
+
+    const canvas = await html2canvas(card, { scale:2, backgroundColor:'#ffffff' });
+    const data = canvas.toDataURL('image/jpeg', 0.92);
+    doc.addImage(data, 'JPEG', x, y, cellW, cellH);
+
+    printed++; onPage++;
+    const col = onPage % perRow;
+    if(col===0){ x=marginX; y += cellH + gap; } else { x += cellW + gap; }
+
+    if(onPage===perPage && i < labels.length-1){
+      doc.addPage(); onPage=0; x=marginX; y=marginY;
     }
+  }
 
-    document.getElementById("btnPrint").addEventListener("click", () => {
-      generateLabelsPDF(CART);
-    });
-  </script>
+  try{ doc.setFontSize(11); doc.text(`Toplam: ${printed} etiket basıldı.`, 105, 290, {align:'center'}); }catch(e){}
+  return doc;
+}
+
+// ================== Yazdır butonu ==================
+document.getElementById('btnPrint').addEventListener('click', async ()=>{
+  try{
+    if(!Array.isArray(window.CART) || window.CART.length===0){ alert('Sepet boş.'); return; }
+    const doc = await generateLabelsPDF(window.CART);
+    doc.save(`etiketler_${new Date().toISOString().slice(0,10)}.pdf`);
+    try{
+      const key='etiket_sayaci'; const total=window.CART.reduce((a,x)=>a+parseInt(x.qty||1,10),0);
+      const cur=parseInt(localStorage.getItem(key)||'0',10); localStorage.setItem(key, String(cur+total));
+    }catch(e){}
+  }catch(err){
+    alert('Yazdırma hatası: '+(err?.message||err));
+  }
+});
+</script>
 </body>
 </html>
