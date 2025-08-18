@@ -478,9 +478,16 @@ $('btnPdfOldSave').addEventListener('click', ()=>{
   logOldShare();
 });
 
+
 function bumpPrintCounter(){
   const key='etiket_print_counter';
   let st = JSON.parse(localStorage.getItem(key)||'{"since":null,"count":0}');
+  const total = CART.reduce((a,x)=>a+x.qty,0); // hem güncel hem eski toplam
+  if(!st.since){ st.since=Date.now(); }
+  st.count = (st.count||0) + total;
+  localStorage.setItem(key, JSON.stringify(st));
+}
+');
   const total=CART.reduce((a,x)=>a+x.qty,0);
   if(!st.since){ st.since=Date.now(); }
   st.count = (st.count||0) + total;
@@ -501,41 +508,54 @@ function logOldShare(cnt){
   localStorage.setItem('etiket_old_logs', JSON.stringify(logs));
 }
 
+
 async function makeLabelsDoc(){
-  const { jsPDF }=window.jspdf; const A4W=210,A4H=297,cols=4,rows=10,margin=5;
+  const { jsPDF }=window.jspdf; const A4W=210,A4H=297,cols=4,rows=7,margin=5;
   const work=$('work'); work.innerHTML='';
   const style=document.createElement('style'); style.textContent=labelCSS; work.appendChild(style);
-  const labels=[]; CART.forEach(it=>{ for(let i=0;i<it.qty;i++) labels.push(it); });
+
+  // yalnızca GÜNCEL fiyatlılar ana PDF'e
+  const fresh = CART.filter(x => !x.isOld);
+  const oldCount = CART.reduce((a,x)=>a+(x.isOld?x.qty:0),0);
+  const freshTotal = fresh.reduce((a,x)=>a+x.qty,0);
+  const grandTotal = freshTotal + oldCount;
+
+  const labels=[]; fresh.forEach(it=>{ for(let i=0;i<it.qty;i++) labels.push(it); });
   const per=cols*rows; const pages=Math.max(1,Math.ceil(labels.length/per)); let li=0; const doc=new jsPDF({unit:'mm',format:'a4'});
 
   for(let pg=0;pg<pages;pg++){
     const page=document.createElement('div');
-    page.style.cssText='width:794px;height:1123px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px;background:#fff';
+    page.style.cssText='width:794px;height:1123px;display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr;gap:6px;padding:12px;background:#fff';
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){
         const holder=document.createElement('div');
         holder.style.cssText='display:flex;align-items:center;justify-content:center;border:1px dashed #e5e7eb;border-radius:8px';
-        const it=labels[li++];
-        if(it){ holder.appendChild(buildLabelNode(it)); }
+        if(li < labels.length){
+          const it=labels[li++];
+          holder.appendChild(buildLabelNode(it));
+        }
         page.appendChild(holder);
       }
     }
     work.appendChild(page);
     const canvas=await html2canvas(page,{scale:3,useCORS:true,allowTaint:true,background:'#fff'}); 
-    const img=canvas.toDataURL('image/jpeg', 0.82);
+    const img=canvas.toDataURL('image/jpeg', 0.86);
     if(pg>0) doc.addPage(); doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
   }
 
-  const total=CART.reduce((a,x)=>a+x.qty,0), oldCount=CART.reduce((a,x)=>a+(x.isOld?x.qty:0),0);
-  const y=A4H-8;
-  doc.setFontSize(14); doc.text(`Toplam: ${total} etiket basıldı.`, A4W/2, y, {align:'center'});
-  doc.setFontSize(14); doc.text(`Eski fiyatlı: ${oldCount} etiket.`, A4W/2, y+6, {align:'center'});
+  // Alt rapor
+  const y=A4H-10;
+  doc.setFontSize(13); doc.text(`Toplam (güncel): ${freshTotal} etiket.`, A4W/2, y, {align:'center'});
+  doc.setFontSize(13); doc.text(`Eski fiyatlı: ${oldCount} etiket.`, A4W/2, y+6, {align:'center'});
+  doc.setFontSize(13); doc.text(`Genel toplam: ${grandTotal} etiket.`, A4W/2, y+12, {align:'center'});
+
   const counterText=getPrintCounterText();
   if(counterText){
-    doc.setFontSize(11); doc.text(counterText, A4W/2, y+12, {align:'center'});
+    doc.setFontSize(10); doc.text(counterText, A4W/2, y+18, {align:'center'});
   }
   return doc;
 }
+
 
 async function makeOldListDoc(){
   const old=CART.filter(x=>x.isOld);
@@ -549,18 +569,25 @@ async function makeOldListDoc(){
   if(old.length===0){
     const no=document.createElement('div'); no.textContent='Eski fiyatlı ürün bulunmadı.'; list.appendChild(no);
   }
+  // Barcode -> product map
+  const pmap = {}; (PRODUCTS||[]).forEach(p=>{ pmap[(p.barcode||'').replace(/\D/g,'')] = p; });
+
   old.forEach(it=>{
     const cvs=document.createElement('canvas');
     const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
     JsBarcode(cvs,it.barcode,{format:fmt,height:36,displayValue:false,margin:0,lineColor:'#000',width:2});
     const png=cvs.toDataURL('image/png');
 
+    const key=(it.barcode||'').replace(/\D/g,'');
+    const base = pmap[key] || {};
+    const fd = base && base.priceDate ? fmtDMY(base.priceDate) : '—';
+
     const row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;justify-content:space-between;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px';
     const left=document.createElement('div');
     left.innerHTML=`<div style="font-weight:800">${it.name}</div>
                     <div style="color:#475569;font-family:Arial">Barkod: ${it.barcode}</div>
-                    <div style="color:#334155">FD Tarihi: <b>${fmtDMY(it.priceDate||null)}</b> • Fiyat: <b>${fmtTRY.format(it.price)}</b></div>`;
+                    <div style="color:#334155">FD Tarihi: <b>${fd}</b> • Fiyat: <b>${fmtTRY.format(it.price)}</b> • Adet: <b>${it.qty}</b></div>`;
     const right=document.createElement('div');
     right.innerHTML=`<img src="${png}" alt="barkod" style="height:36px">`;
 
@@ -570,7 +597,7 @@ async function makeOldListDoc(){
 
   $('work').innerHTML=''; $('work').appendChild(wrap);
   const canvas=await html2canvas(wrap,{scale:3,useCORS:true,allowTaint:true,background:'#fff'}); 
-  const img=canvas.toDataURL('image/jpeg', 0.82);
+  const img=canvas.toDataURL('image/jpeg', 0.86);
   doc.addImage(img,'JPEG',5,5,200,287);
   return doc;
 }
@@ -619,8 +646,19 @@ window.addEventListener('beforeunload', (e)=>{
 
 /* ===== Fiyatı son 10 günde değişenler ===== */
 
+
+
 $('btnChanges').addEventListener('click', ()=>{
-  const list = PRODUCTS.filter(p => p.priceDate && daysDiff(new Date(p.priceDate)) <= 10);
+  const now = new Date();
+  const list = (PRODUCTS||[])
+    .filter(p => p.priceDate)
+    .filter(p => {
+      const d = new Date(p.priceDate);
+      const diffDays = Math.floor((now - d) / (1000*60*60*24));
+      return diffDays >= 0 && diffDays <= 10; // sadece son 10 gün, gelecektekiler hariç
+    })
+    .sort((a,b) => new Date(b.priceDate) - new Date(a.priceDate)); // en yeni en üstte
+
   const L = $('chgList'); L.innerHTML='';
   if(!list.length){
     const empty = document.createElement('div');
@@ -631,7 +669,11 @@ $('btnChanges').addEventListener('click', ()=>{
     list.forEach(it=>{
       const li = document.createElement('div');
       li.className = 'item';
-      li.innerHTML = `<div><div class="nm">${it.name}</div><div class="bc">${it.barcode}</div></div><div>${fmtTRY.format(it.price)}</div>`;
+      li.innerHTML = `<div>
+                        <div class="nm">${it.name}</div>
+                        <div class="bc">${it.barcode} • FD: ${fmtDMY(it.priceDate||null)}</div>
+                      </div>
+                      <div><b>${fmtTRY.format(it.price)}</b></div>`;
       li.onclick = ()=>{ $('mdlChanges').classList.remove('shown'); openProduct(it); };
       L.appendChild(li);
     });
@@ -639,8 +681,6 @@ $('btnChanges').addEventListener('click', ()=>{
   $('mdlChanges').classList.add('shown');
 });
 $('btnChgClose').addEventListener('click', ()=> $('mdlChanges').classList.remove('shown'));
-
-
 
 /* ===== Kamera: Android + Masaüstü (BarcodeDetector veya Quagga) ===== */
 (function(){
