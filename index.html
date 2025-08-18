@@ -537,7 +537,6 @@ async function makeLabelsDoc(){
   return doc;
 }
 
-
 async function makeOldListDoc(){
   const old=CART.filter(x=>x.isOld);
   const { jsPDF }=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -550,26 +549,18 @@ async function makeOldListDoc(){
   if(old.length===0){
     const no=document.createElement('div'); no.textContent='Eski fiyatlı ürün bulunmadı.'; list.appendChild(no);
   }
-
-  // Barcode -> product map (FD'yi buradan al)
-  const pmap = {}; (PRODUCTS||[]).forEach(p=>{ pmap[(p.barcode||'').replace(/\D/g,'')] = p; });
-
   old.forEach(it=>{
     const cvs=document.createElement('canvas');
     const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
     JsBarcode(cvs,it.barcode,{format:fmt,height:36,displayValue:false,margin:0,lineColor:'#000',width:2});
     const png=cvs.toDataURL('image/png');
 
-    const key=(it.barcode||'').replace(/\D/g,'');
-    const base = pmap[key] || {};
-    const fd = base && base.priceDate ? fmtDMY(base.priceDate) : '—';
-
     const row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;justify-content:space-between;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px';
     const left=document.createElement('div');
     left.innerHTML=`<div style="font-weight:800">${it.name}</div>
                     <div style="color:#475569;font-family:Arial">Barkod: ${it.barcode}</div>
-                    <div style="color:#334155">FD Tarihi: <b>${fd}</b> • Fiyat: <b>${fmtTRY.format(it.price)}</b> • Adet: <b>${it.qty}</b></div>`;
+                    <div style="color:#334155">FD Tarihi: <b>${fmtDMY(it.priceDate||null)}</b> • Fiyat: <b>${fmtTRY.format(it.price)}</b></div>`;
     const right=document.createElement('div');
     right.innerHTML=`<img src="${png}" alt="barkod" style="height:36px">`;
 
@@ -579,7 +570,7 @@ async function makeOldListDoc(){
 
   $('work').innerHTML=''; $('work').appendChild(wrap);
   const canvas=await html2canvas(wrap,{scale:3,useCORS:true,allowTaint:true,background:'#fff'}); 
-  const img=canvas.toDataURL('image/jpeg', 0.86);
+  const img=canvas.toDataURL('image/jpeg', 0.82);
   doc.addImage(img,'JPEG',5,5,200,287);
   return doc;
 }
@@ -628,18 +619,8 @@ window.addEventListener('beforeunload', (e)=>{
 
 /* ===== Fiyatı son 10 günde değişenler ===== */
 
-
 $('btnChanges').addEventListener('click', ()=>{
-  const now = new Date();
-  const list = (PRODUCTS||[])
-    .filter(p => p.priceDate)
-    .filter(p => {
-      const d = new Date(p.priceDate);
-      const diffDays = Math.floor((now - d) / (1000*60*60*24));
-      return diffDays >= 0 && diffDays <= 10;
-    })
-    .sort((a,b) => new Date(b.priceDate) - new Date(a.priceDate));
-
+  const list = PRODUCTS.filter(p => p.priceDate && daysDiff(new Date(p.priceDate)) <= 10);
   const L = $('chgList'); L.innerHTML='';
   if(!list.length){
     const empty = document.createElement('div');
@@ -650,11 +631,7 @@ $('btnChanges').addEventListener('click', ()=>{
     list.forEach(it=>{
       const li = document.createElement('div');
       li.className = 'item';
-      li.innerHTML = `<div>
-                        <div class="nm">${it.name}</div>
-                        <div class="bc">${it.barcode} • FD: ${fmtDMY(it.priceDate||null)}</div>
-                      </div>
-                      <div><b>${fmtTRY.format(it.price)}</b></div>`;
+      li.innerHTML = `<div><div class="nm">${it.name}</div><div class="bc">${it.barcode}</div></div><div>${fmtTRY.format(it.price)}</div>`;
       li.onclick = ()=>{ $('mdlChanges').classList.remove('shown'); openProduct(it); };
       L.appendChild(li);
     });
@@ -662,6 +639,8 @@ $('btnChanges').addEventListener('click', ()=>{
   $('mdlChanges').classList.add('shown');
 });
 $('btnChgClose').addEventListener('click', ()=> $('mdlChanges').classList.remove('shown'));
+
+
 
 /* ===== Kamera: Android + Masaüstü (BarcodeDetector veya Quagga) ===== */
 (function(){
