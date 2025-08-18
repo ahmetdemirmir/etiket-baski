@@ -547,15 +547,20 @@ $('cartList').addEventListener('click', (e)=>{ const ctr=e.target.closest('.qtyC
 $('toggleFx').checked=!!FX; $('toggleFx').addEventListener('change', ()=>{ FX=$('toggleFx').checked; localStorage.setItem('etiket_fx',JSON.stringify(FX)); });
 
 /* ===== PRINT: ÖNİZLEME + KAYDET + ESKİ LİSTE ===== */
+
 $('btnPrint').addEventListener('click', async ()=>{
-  if(CART.length===0){ alert('Sepet boş.'); return; }
-  __docLabels = await makeLabelsDoc();
-  const blob = __docLabels.output('blob');
-  if (__urlLabels) URL.revokeObjectURL(__urlLabels);
-  __urlLabels = URL.createObjectURL(blob);
-  $('pdfFrame').src = __urlLabels;
-  $('mdlPdf').classList.add('shown');
+  try{
+    if(!Array.isArray(CART) || CART.length===0){ alert('Sepet boş.'); return; }
+    if(typeof generateLabelsPDF !== 'function'){ alert('PDF modülü yüklenemedi.'); return; }
+    const doc = await generateLabelsPDF(CART);
+    // En garantisi: doğrudan kaydet
+    doc.save(`etiketler_${new Date().toISOString().slice(0,10)}.pdf`);
+    try{ if(typeof bumpPrintCounter==='function') bumpPrintCounter(); }catch(e){}
+  }catch(err){
+    alert('Yazdırma hatası: ' + (err && err.message ? err.message : err));
+  }
 });
+
 $('btnPdfCancel').addEventListener('click', ()=> $('mdlPdf').classList.remove('shown'));
 $('btnPdfSave').addEventListener('click', async ()=>{
   // ÖNCE ana PDF'i kaydet
