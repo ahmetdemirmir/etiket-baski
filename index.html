@@ -7,7 +7,130 @@
 <title>Fiyat Gör Etiket Bas — GÜNCEL</title>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
+async function generateLabelsPDF(cartItems) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF("p", "mm", "a4");
+
+  const perRow = 4;
+  const perCol = 7;             // 7 satır → 28/sayfa
+  const perPage = perRow * perCol;
+
+  const cellW = 65;             // mm
+  const cellH = 35;             // mm
+  const gap = 5;                // mm
+  const marginX = 10;
+  const marginY = 10;
+
+  // Sepetteki miktarları genişlet
+  const labels = [];
+  (cartItems || []).forEach(it => {
+    const qty = Math.max(1, parseInt(it.qty || 1, 10));
+    for (let q = 0; q < qty; q++) labels.push(it);
+  });
+
+  // Etiket DOM şablonu
+  const holder = document.createElement("div");
+  holder.style.position = "fixed";
+  holder.style.left = "-9999px";
+  holder.style.top = "-9999px";
+  document.body.appendChild(holder);
+
+  let printed = 0;
+  let x = marginX, y = marginY;
+  let countOnPage = 0;
+
+  for (let i = 0; i < labels.length; i++) {
+    const it = labels[i];
+
+    const itemDiv = document.createElement("div");
+    itemDiv.style.width  = cellW + "mm";
+    itemDiv.style.height = cellH + "mm";
+    itemDiv.style.boxSizing = "border-box";
+    itemDiv.style.padding = "2mm";
+    itemDiv.style.display = "flex";
+    itemDiv.style.flexDirection = "column";
+    itemDiv.style.justifyContent = "space-between";
+    itemDiv.style.border = "1px solid #e5e7eb";
+    itemDiv.style.borderRadius = "6px";
+    itemDiv.style.fontFamily = "Arial, Helvetica, sans-serif";
+
+    const top = document.createElement("div");
+    top.style.fontSize = "10px";
+    top.style.fontWeight = "700";
+    top.style.lineHeight = "1.2";
+    top.textContent = it.name || "";
+
+    const mid = document.createElement("div");
+    mid.style.display = "flex";
+    mid.style.alignItems = "center";
+    mid.style.justifyContent = "space-between";
+
+    const price = document.createElement("div");
+    price.style.fontSize = "12px";
+    price.style.fontWeight = "800";
+    try {
+      const fmt = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 2 });
+      price.textContent = fmt.format(parseFloat(it.price || 0) || 0);
+    } catch(e) {
+      price.textContent = (it.price || 0) + " ₺";
+    }
+
+    const bcCanvas = document.createElement("canvas");
+    try {
+      const fmt = (/^\d{13}$/.test(String(it.barcode||""))) ? "EAN13" : "CODE128";
+      JsBarcode(bcCanvas, String(it.barcode||""), { format: fmt, height: 28, width: 1.6, displayValue: true, fontSize: 9, margin: 0 });
+    } catch(e) {}
+
+    mid.appendChild(price);
+    const bcImg = document.createElement("img");
+    bcImg.src = bcCanvas.toDataURL("image/png");
+    bcImg.style.height = "28px";
+    bcImg.style.objectFit = "contain";
+    mid.appendChild(bcImg);
+
+    itemDiv.appendChild(top);
+    itemDiv.appendChild(mid);
+    holder.appendChild(itemDiv);
+
+    const canvas = await html2canvas(itemDiv, { scale: 2, backgroundColor: "#ffffff" });
+    const img = canvas.toDataURL("image/jpeg", 0.9);
+
+    // PDF'e yerleştir
+    doc.addImage(img, "JPEG", x, y, cellW, cellH);
+
+    // Sonraki hücre koordinatları
+    countOnPage++;
+    printed++;
+
+    const colIndex = countOnPage % perRow;
+    if (colIndex === 0) { // satır bitti
+      x = marginX;
+      y += cellH + gap;
+    } else {
+      x += cellW + gap;
+    }
+
+    // Sayfa bitti mi?
+    if (countOnPage === perPage && i < labels.length - 1) {
+      doc.addPage();
+      x = marginX;
+      y = marginY;
+      countOnPage = 0;
+    }
+  }
+
+  // Alt bilgi
+  try {
+    doc.setFontSize(11);
+    doc.text(`Toplam: ${printed} etiket basıldı.`, 105, 290, { align: "center" });
+  } catch(e) {}
+
+  document.body.removeChild(holder);
+  return doc;
+}
+
+</script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -501,41 +624,6 @@ function logOldShare(cnt){
   localStorage.setItem('etiket_old_logs', JSON.stringify(logs));
 }
 
-async function makeLabelsDoc(){
-  const { jsPDF }=window.jspdf; const A4W=210,A4H=297,cols=4,rows=7,margin=5;
-  const work=$('work'); work.innerHTML='';
-  const style=document.createElement('style'); style.textContent=labelCSS; work.appendChild(style);
-  const labels=[]; CART.forEach(it=>{ for(let i=0;i<it.qty;i++) labels.push(it); });
-  const per=cols*rows; const pages=Math.max(1,Math.ceil(labels.length/per)); let li=0; const doc=new jsPDF({unit:'mm',format:'a4'});
-
-  for(let pg=0;pg<pages;pg++){
-    const page=document.createElement('div');
-    page.style.cssText='width:794px;height:1123px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px;background:#fff';
-    for(let r=0;r<rows;r++){
-      for(let c=0;c<cols;c++){
-        const holder=document.createElement('div');
-        holder.style.cssText='display:flex;align-items:center;justify-content:center;border:1px dashed #e5e7eb;border-radius:8px';
-        const it=labels[li++];
-        if(it){ holder.appendChild(buildLabelNode(it)); }
-        page.appendChild(holder);
-      }
-    }
-    work.appendChild(page);
-    const canvas=await html2canvas(page,{scale:3,useCORS:true,allowTaint:true,background:'#fff'}); 
-    const img=canvas.toDataURL('image/jpeg', 0.82);
-    if(pg>0) doc.addPage(); doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
-  }
-
-  const total=CART.reduce((a,x)=>a+x.qty,0), oldCount=CART.reduce((a,x)=>a+(x.isOld?x.qty:0),0);
-  const y=A4H-8;
-  doc.setFontSize(14); doc.text(`Toplam: ${total} etiket basıldı.`, A4W/2, y, {align:'center'});
-  doc.setFontSize(14); doc.text(`Eski fiyatlı: ${oldCount} etiket.`, A4W/2, y+6, {align:'center'});
-  const counterText=getPrintCounterText();
-  if(counterText){
-    doc.setFontSize(11); doc.text(counterText, A4W/2, y+12, {align:'center'});
-  }
-  return doc;
-}
 
 async function makeOldListDoc(){
   const old=CART.filter(x=>x.isOld);
@@ -626,8 +714,8 @@ $('btnChanges').addEventListener('click', ()=>{
     .filter(p => p.priceDate)
     .filter(p => {
       const d = new Date(p.priceDate);
-      const diff = Math.floor((now - d) / (1000*60*60*24));
-      return diff >= 0 && diff <= 10;
+      const diffDays = Math.floor((now - d) / (1000*60*60*24));
+      return diffDays >= 0 && diffDays <= 10;
     })
     .sort((a,b)=> new Date(b.priceDate) - new Date(a.priceDate));
 
