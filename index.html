@@ -137,11 +137,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     <div class="mini barcodeBig">Barkod: <span id="mBarcode"></span></div>
     <div class="mini" id="mDateRow">Fiyat Değişiklik Tarihi: <span id="mDate"></span></div>
     <div id="mOld" class="warn" style="display:none">⚠️ Fiyat değişiklik tarihi 12 aydan eski! Yöneticinize bilgi verin.</div>
-
-    <!-- Etiket önizleme -->
-    <div id="mPreview" class="mini" style="margin:8px 0;padding:8px;border:1px dashed #e5e7eb;border-radius:10px;background:#fafafa"></div>
-
-    <div class="actions">
+<div class="actions">
       <button class="btn" data-qty="1">1 Adet</button>
       <button class="btn" id="btnCustom"><i class="fa-solid fa-plus"></i> Özel</button>
       <button class="btn danger" id="btnCancel">İptal</button>
@@ -384,12 +380,6 @@ function openProduct(p){
   $('mDate').textContent = d ? fmtDMY(d) : '—';
   $('mDateRow').style.display=d?'block':'none';
   const old=isOld(p); $('mOld').style.display=old?'block':'none';
-
-  // Önizleme
-  const prev = $('mPreview'); prev.innerHTML='';
-  const prevWrap = document.createElement('div'); prevWrap.style.cssText='transform:scale(.8); transform-origin:top left;';
-  prevWrap.appendChild(buildLabelNode(p));
-  prev.appendChild(prevWrap);
 
   mdl.classList.add('shown');
   mdl.querySelectorAll('[data-qty]').forEach(b=> b.onclick=()=> wantAddToCart(p,parseInt(b.dataset.qty),old));
