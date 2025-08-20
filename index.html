@@ -135,7 +135,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       </div>
       <div class="control">
         <button id="btnCart" class="btn neutral" style="font-size:16px"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
-        <button id="btnPrint" class="btn success" style="font-size:16px"><i class="fa-solid fa-print"></i> Yazdır</button>
+        <button id="btnPrint" class="btn success" style="font-size:16px" onclick="onPrintClick(event)"><i class="fa-solid fa-print"></i> Yazdır</button>
         <button id="btnCam" class="btn primary" style="font-size:16px"><i class="fa-solid fa-camera"></i> Kamera Aç</button>
         <button id="btnCamIOS" class="btn neutral" style="font-size:16px"><i class="fa-brands fa-apple"></i> Kamera Aç (iOS)</button>
       </div>
@@ -237,7 +237,37 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   
 
 
-  // ---- Progress helpers ----
+  
+  // ---- PRINT BUTTON HARD-BIND (fallback + delegation) ----
+  window.__printBusy = false;
+  window.onPrintClick = async function(ev){
+    if(window.__printBusy) return;
+    try{
+      window.__printBusy = true;
+      if(typeof showProgress==='function') showProgress();
+      if(CART.length===0){ alert('Sepet boş.'); return; }
+      if(CART.some(x=>x.isOld)){
+        // varsa eski fiyat uyarı akışı
+        const m=document.getElementById('mdlOldWarn');
+        if(m) m.classList.add('shown');
+        else await makeAndShowLabelsPreview();
+      }else{
+        await makeAndShowLabelsPreview();
+      }
+    }catch(e){
+      console.error(e);
+      alert('Yazdır hazırlanırken hata oluştu: ' + (e?.message||e));
+    }finally{
+      window.__printBusy = false;
+      if(typeof hideProgress==='function') hideProgress();
+    }
+  };
+  // Delegated safety binding
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest && e.target.closest('#btnPrint');
+    if(btn){ onPrintClick(e); e.preventDefault(); }
+  }, true);
+// ---- Progress helpers ----
   const sleepFrame = ()=> new Promise(res=> requestAnimationFrame(res));
   const showProgress = (msg)=>{ try{ document.getElementById('progText').textContent='0%'; document.getElementById('progBar').style.width='0%'; document.getElementById('mdlProgress').classList.add('shown'); }catch(_){} };
   const updateProgress = (n, d)=>{ try{ const pct = d? Math.round((n/d)*100):0; document.getElementById('progText').textContent = pct + '%'; document.getElementById('progBar').style.width = pct + '%'; }catch(_){} };
