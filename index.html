@@ -504,45 +504,81 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
 
   
 
+
 async function makeLabelsDoc(){
   const { jsPDF }=window.jspdf;
-  // A4 doc in mm
-  const A4W=210, A4H=297, margin=5;
+  // === A4 ve 27/sayfa (3x9) ===
+  const A4W=210, A4H=297;
+  const margin=5;               // sayfa dış marjin (mm)
+  const gapMM=1.5;              // hücreler arası boşluk (mm) — küçültüldü
+  const cols=3, rows=9;         // 27/sayfa
+  const gridW=A4W - margin*2, gridH=A4H - margin*2;
+  const colW=(gridW - gapMM*(cols-1))/cols;
+  const rowH=(gridH - gapMM*(rows-1))/rows;
 
-  // Flatten labels
+  // Etiketleri sıraya diz
   const labels=[]; CART.forEach(it=>{ for(let i=0;i<it.qty;i++) labels.push(it); });
-  const per = (LABELS_PER_PAGE.cols * LABELS_PER_PAGE.rows); // 27/sayfa
-  const pages = Math.max(1, Math.ceil(labels.length / per));
-  const doc = new jsPDF({unit:'mm',format:'a4'});
+  const per=cols*rows; const pages=Math.max(1, Math.ceil(labels.length/per));
+  const doc=new jsPDF({unit:'mm',format:'a4'});
 
-  const work = document.getElementById('work') || (()=>{const d=document.createElement('div'); d.id='work'; d.style.cssText='position:fixed;left:-9999px;top:-9999px;opacity:0'; document.body.appendChild(d); return d;})();
-  work.innerHTML='';
+  // Yardımcı: DOM'dan node üret (orijinal görünüm öncelikli)
+  function createLabelNode(it){
+    let node=null;
+    try{ if(typeof window.renderOriginalLabel==='function'){ node=window.renderOriginalLabel(it); } }catch(e){ node=null; }
+    if(!node && typeof buildLabelNode==='function'){ node=buildLabelNode(it); }
+    if(!node){ node=document.createElement('div'); node.style.cssText='font:12px Arial;padding:6px;background:#fff'; node.textContent=(it?.name||'')+' — '+new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(it?.price||0); }
+    return node;
+  }
 
-  for(let p=0; p<pages; p++){
+  // Yardımcı: Node'u canvas'a çevir → dataURL döndür
+  async function nodeToDataURL(node){
+    // Ölçüm ve min ölçek: daha net için scale=2
+    return (await html2canvas(node,{background:'#fff',scale:2,useCORS:true,allowTaint:true})).toDataURL('image/jpeg',0.92);
+  }
+
+  // Her sayfayı yerleştir
+  for(let p=0;p<pages;p++){
     if(p>0) doc.addPage();
-    const slice = labels.slice(p*per, p*per + per);
-    // if slice shorter, fill with placeholders to keep grid alignment
-    while(slice.length < per) slice.push(null);
+    const slice = labels.slice(p*per, p*per+per);
+    // 27 hücrenin tamamını dolaş; boş olanlara placeholder çizme (boş bırak)
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        const i=r*cols+c; const it=slice[i];
+        const x = margin + c*(colW+gapMM);
+        const y = margin + r*(rowH+gapMM);
+        // Hücre sınırı (çok hafif grid için)
+        doc.setDrawColor(240); doc.setLineWidth(0.15); doc.roundedRect(x+0.4, y+0.4, colW-0.8, rowH-0.8, 1.5, 1.5);
 
-    const pageNode = await renderPageWithOriginalDOM(doc, slice.filter(Boolean));
-    work.appendChild(pageNode);
+        if(!it) continue;
+        // 1) Etiket node'unu üret
+        const node=createLabelNode(it);
+        // 2) Node'u görüntüye çevir
+        const dataURL = await nodeToDataURL(node);
+        // 3) Resmi hücreye oranla yerleştir (iç boşluk payı)
+        const pad=1.0; // mm
+        const maxW=colW - pad*2;
+        const maxH=rowH - pad*2;
+        // Görsel oranını bilmiyoruz → jsPDF addImage'de width/height oranını korumak için,
+        // önce kabaca maxW,maxH verip sonra merkezleyeceğiz.
+        // addImage resim oranını bozmaz; width/height verdiğimizde fit eder.
+        let drawW=maxW, drawH=maxH;
+        // İçerik görseli büyükse sığar; küçükse merkezde kalır.
+        doc.addImage(dataURL, 'JPEG', x+pad, y+pad, drawW, drawH, undefined, 'FAST');
+      }
+    }
 
-    const canvas = await html2canvas(pageNode,{scale:3,useCORS:true,allowTaint:true,background:'#fff'});
-    const img = canvas.toDataURL('image/jpeg',0.92);
-    doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
-
+    // Alt bilgi
     if(p===pages-1){
       const total = CART.reduce((a,x)=>a+x.qty,0);
       const oldCount = CART.reduce((a,x)=>a+(x.isOld?x.qty:0),0);
       const sinceTxt = `${new Date(+PRINT_BASE_TS).toLocaleString('tr-TR')}’den beri ${TOTAL_PRINTED+total} etiket basıldı.`;
       doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(17,24,39);
-      doc.text(`Toplam: ${total} • Eski fiyatlı: ${oldCount} • ${sinceTxt}`, A4W/2, A4H-3, {align:'center'});
-    } else {
+      doc.text(`Toplam: ${total} • Eski fiyatlı: ${oldCount} • ${sinceTxt}`, A4W/2, A4H-2.5, {align:'center'});
+    }else{
       doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,116,139);
-      doc.text('Devamı sonraki sayfada…', A4W-10, A4H-3, {align:'right'});
+      doc.text('Devamı sonraki sayfada…', A4W-8, A4H-2.5, {align:'right'});
     }
   }
-
   return doc;
 }
 
