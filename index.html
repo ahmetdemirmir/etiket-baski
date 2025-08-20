@@ -685,5 +685,21 @@ async function makeLabelsDoc(){
 
 })();
 </script>
+
+<script>
+// === Kamera seçiminden sonra otomatik yeniden açma helper'ı ===
+window.__lastCam = window.__lastCam || null;
+function reopenLastCam(){
+  const t = window.__lastCam;
+  if(!t) return;
+  setTimeout(()=>{
+    try{
+      if(t==='android'){ document.getElementById('btnCam')?.click(); }
+      else if(t==='ios'){ document.getElementById('btnCamIOS')?.click(); }
+    }catch(_){}
+  },250);
+}
+</script>
+
 </body>
 </html>
