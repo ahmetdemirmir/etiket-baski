@@ -257,8 +257,6 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
   for(const it of labelsSlice){
     const cell = document.createElement('div');
     cell.style.cssText = "position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:6px;";
-    // Placeholder (boş slot) ise içeriğe dokunmadan hücre ekle
-    if(!it || it.__empty){ page.appendChild(cell); continue; }
 
     let node=null;
     try{
@@ -398,7 +396,15 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     const idx=CART.findIndex(x=>x.barcode===p.barcode);
     if(idx>-1) CART[idx].qty+=qty; else CART.push({barcode:p.barcode,name:p.name,price:p.price,isOld:!!isOldFlag,qty});
     setCart(CART); mdl.classList.remove('shown'); beep(true); refocusAfterAction(true);
-  }
+  
+  try {
+    if (window.__lastScanSource === 'android') {
+      setTimeout(() => { var b=document.getElementById('btnCam'); if(b) b.click(); }, 200);
+    } else if (window.__lastScanSource === 'ios') {
+      setTimeout(() => { var b=document.getElementById('btnCamIOS'); if(b) b.click(); }, 200);
+    }
+  } catch(_) {}
+}
 
   /* ===== CART MODAL ===== */
   function renderCart(){
@@ -524,14 +530,14 @@ async function makeLabelsDoc(){
     if(p>0) doc.addPage();
     const slice = labels.slice(p*per, p*per + per);
     // if slice shorter, fill with placeholders to keep grid alignment
-    while (slice.length < per) slice.push({__empty:true});
+    while(slice.length < per) slice.push(null);
 
-    const pageNode = await renderPageWithOriginalDOM(doc, slice);
+    const pageNode = await renderPageWithOriginalDOM(doc, slice.filter(Boolean));
     work.appendChild(pageNode);
 
     const canvas = await html2canvas(pageNode,{scale:3,useCORS:true,allowTaint:true,background:'#fff'});
     const img = canvas.toDataURL('image/jpeg',0.92);
-    doc.addImage(img,'JPEG', 0,0,A4W,A4H);
+    doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
 
     if(p===pages-1){
       const total = CART.reduce((a,x)=>a+x.qty,0);
@@ -687,5 +693,74 @@ async function makeLabelsDoc(){
 
 })();
 </script>
+
+<script>
+(function(){
+  async function startIOS_ZXING(){
+    try{
+      // Ensure iOS camera UI exists
+      var sheet = document.getElementById('camSheetIOS');
+      if(!sheet){
+        sheet=document.createElement('div');
+        sheet.id='camSheetIOS';
+        sheet.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:flex;align-items:center;justify-content:center';
+        sheet.innerHTML='<div id="camBoxIOS" style="width:min(96vw,720px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden"><div id="camHeadIOS" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb"><b>Kamera (iOS)</b><div><button id="camCloseIOS" class="btn">Kapat</button></div></div><div id="camMountIOS" style="position:relative;width:100%;height:380px;background:#000"><video id="camVideoIOS" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video></div><div id="camFootIOS" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;background:#fafafa"><button id="camStopIOS" class="btn">Durdur</button></div></div>';
+        document.body.appendChild(sheet);
+      }
+      sheet.style.display='flex';
+      var v = document.getElementById('camVideoIOS');
+
+      async function pickRearDeviceId(){ try{ const devices=await navigator.mediaDevices.enumerateDevices(); const cams=devices.filter(d=>d.kind==='videoinput'); if(!cams.length) return null; let rear=cams.find(d=>/back|rear|environment/i.test(d.label)); return (rear||cams[cams.length-1]).deviceId; }catch(_){ return null; } }
+      const rearId = await pickRearDeviceId();
+      const constraints = rearId ? { video:{ deviceId:{exact:rearId}, facingMode:'environment', width:{ideal:1280}, height:{ideal:720} } } : { video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} } };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      v.srcObject = stream;
+      await v.play().catch(()=>{});
+
+      if(!window.ZXingBrowser){
+        const s=document.createElement('script');
+        s.src='https://unpkg.com/@zxing/browser@latest';
+        await new Promise((res,rej)=>{ s.onload=res; s.onerror=rej; });
+        document.head.appendChild(s);
+      }
+      const reader=new window.ZXingBrowser.BrowserMultiFormatReader();
+      const tr = (v.srcObject && v.srcObject.getVideoTracks && v.srcObject.getVideoTracks()[0]) || null;
+      const deviceId = tr && tr.getSettings && tr.getSettings().deviceId;
+
+      await reader.decodeFromVideoDevice(deviceId || undefined, 'camVideoIOS', (result, err, controls)=>{
+        if(result && result.getText){
+          const code=(result.getText()||'').toString();
+          if(code){
+            controls.stop();
+            try{ window.__lastScanSource='ios'; }catch(_){}
+            if(typeof onDetected === 'function'){ onDetected(code); }
+            try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){}
+            sheet.style.display='none';
+          }
+        }
+      });
+
+      function stopAll(){
+        try{ reader && reader.reset && reader.reset(); }catch(_){}
+        try{ if(v && v.srcObject){ v.srcObject.getTracks().forEach(t=>t.stop()); v.srcObject=null; } }catch(_){}
+        sheet.style.display='none';
+      }
+      var closeBtn=document.getElementById('camCloseIOS');
+      var stopBtn=document.getElementById('camStopIOS');
+      closeBtn && closeBtn.addEventListener('click', stopAll);
+      stopBtn && stopBtn.addEventListener('click', stopAll);
+    }catch(e){
+      alert('iOS ZXing başlatılamadı: '+(e && e.message ? e.message : e));
+    }
+  }
+
+  // bind
+  (function(){
+    var btn=document.getElementById('btnCamIOS');
+    if(btn){ btn.onclick=function(ev){ ev.preventDefault(); startIOS_ZXING(); }; }
+  })();
+})();
+</script>
+
 </body>
 </html>
