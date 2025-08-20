@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fiyat Gör Etiket Bas — TAM SÜRÜM (28/sayfa fix)</title>
+<title>Fiyat Gör Etiket Bas — TAM SÜRÜM ( 24/sayfa • yüksek çözünürlük</title>
 
 <!-- Icons & Libs -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
@@ -84,16 +84,16 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 
 /* Label template (UI gösterim için — PDF çizimini jsPDF ile yapıyoruz) */
 #etiketler{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
-.etiket{background:#fff;width:260px;height:100px;border-radius:14px;box-shadow:0 1px 6px #d7d7db55;display:flex;flex-direction:row;align-items:flex-start;padding:12px 12px 8px 6px;box-sizing:border-box;position:relative}
-.etiket-logo{width:60px;height:78px;margin-right:5px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:flex-start}
+.etiket{background:#fff;width:280px;height: 110px;border-radius:14px;box-shadow:0 1px 6px #d7d7db55;display:flex;flex-direction:row;align-items:flex-start;padding:12px 12px 8px 6px;box-sizing:border-box;position:relative}
+.etiket-logo{width:70px;height: 90px;margin-right:5px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:flex-start}
 .etiket-logo img{width:100%;height:100%;object-fit:contain}
 .etiket-icerik{flex:1;display:flex;flex-direction:column;justify-content:space-between;height:100%}
-.etiket-stokadi{font-size:12px;font-weight:500;color:#2e2e2e;line-height:1.1;min-height:36px;max-height:32px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.etiket-stokadi{font-size:13px;font-weight:500;color:#2e2e2e;line-height:1.1;min-height:36px;max-height:32px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .etiket-row{display:flex;align-items:flex-end;justify-content:flex-end;gap:4px}
-.etiket-fiyat{font-size:24px;color:#e20032;font-weight:650;letter-spacing:1px;margin:0;display:flex;align-items:flex-end;gap:2px;min-width:52px;justify-content:flex-end}
-.etiket-fiyat .tlsimge{font-size:14px;margin-left:1px}
-.etiket-barkod{width:72px;height:45px;display:flex;flex-direction:column;align-items:flex-end}
-.etiket-barkod img{width:100%;height:36px;object-fit:contain}
+.etiket-fiyat{font-size:26px;color:#e20032;font-weight:650;letter-spacing:1px;margin:0;display:flex;align-items:flex-end;gap:2px;min-width:52px;justify-content:flex-end}
+.etiket-fiyat .tlsimge{font-size:15px;margin-left:1px}
+.etiket-barkod{width:72px;height:54px;display:flex;flex-direction:column;align-items:flex-end}
+.etiket-barkod img{width:100%;height:44px;object-fit:contain}
 
 /* FD 10 gün liste */
 .groupCard{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px}
@@ -237,7 +237,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   
 
 // === LAYOUT CONFIG (27/sayfa) ===
-const LABELS_PER_PAGE = { cols: 3, rows: 9, gapPx: 4, pagePaddingPx: 10 }; // 3x9=27
+const LABELS_PER_PAGE = { cols: 3, rows: 8, gapPx: 6, pagePaddingPx: 12 }; // 3x8=24; // 3x9=27
 
 // Helper to build a page grid with scaled original DOM
 async function renderPageWithOriginalDOM(doc, labelsSlice){
@@ -422,7 +422,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     // UI önizleme için HTML etiket şablonu (PDF çiziminden bağımsız)
     const canvas=document.createElement('canvas');
     const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
-    JsBarcode(canvas,it.barcode,{format:fmt,height:44,width:2,displayValue:true,font:'Arial',fontSize:12,textMargin:2,margin:0,lineColor:'#000'});
+    JsBarcode(canvas,it.barcode,{format:fmt,height:52,width:2.2,displayValue:true,font:'Arial',fontSize:13,textMargin:2,margin:0,lineColor:'#000'});
     const barPng=canvas.toDataURL('image/jpeg',0.82);
     const priceStr=fmtTRY.format(it.price).replace('₺','');
     const wrap=document.createElement('div');
@@ -527,7 +527,7 @@ async function makeLabelsDoc(){
     const pageNode = await renderPageWithOriginalDOM(doc, slice.filter(Boolean));
     work.appendChild(pageNode);
 
-    const canvas = await html2canvas(pageNode,{scale:3,useCORS:true,allowTaint:true,background:'#fff'});
+    const canvas = await html2canvas(pageNode,{scale:4,useCORS:true,allowTaint:true,background:'#fff'});
     const img = canvas.toDataURL('image/jpeg',0.92);
     doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
 
