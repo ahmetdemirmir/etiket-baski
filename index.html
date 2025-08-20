@@ -397,13 +397,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     if(idx>-1) CART[idx].qty+=qty; else CART.push({barcode:p.barcode,name:p.name,price:p.price,isOld:!!isOldFlag,qty});
     setCart(CART); mdl.classList.remove('shown'); beep(true); refocusAfterAction(true);
   
-  try {
-    if (window.__lastScanSource === 'android') {
-      setTimeout(() => { var b=document.getElementById('btnCam'); if(b) b.click(); }, 200);
-    } else if (window.__lastScanSource === 'ios') {
-      setTimeout(() => { var b=document.getElementById('btnCamIOS'); if(b) b.click(); }, 200);
-    }
-  } catch(_) {}
+  try { if (window.__lastScanSource === 'ios') { setTimeout(() => { var b=document.getElementById('btnCamIOS'); if(b) b.click(); }, 200); } } catch(_) {}
 }
 
   /* ===== CART MODAL ===== */
@@ -698,66 +692,103 @@ async function makeLabelsDoc(){
 (function(){
   async function startIOS_ZXING(){
     try{
-      // Ensure iOS camera UI exists
       var sheet = document.getElementById('camSheetIOS');
       if(!sheet){
-        sheet=document.createElement('div');
-        sheet.id='camSheetIOS';
-        sheet.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:flex;align-items:center;justify-content:center';
-        sheet.innerHTML='<div id="camBoxIOS" style="width:min(96vw,720px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden"><div id="camHeadIOS" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb"><b>Kamera (iOS)</b><div><button id="camCloseIOS" class="btn">Kapat</button></div></div><div id="camMountIOS" style="position:relative;width:100%;height:380px;background:#000"><video id="camVideoIOS" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video></div><div id="camFootIOS" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;background:#fafafa"><button id="camStopIOS" class="btn">Durdur</button></div></div>';
+        sheet = document.createElement('div');
+        sheet.id = 'camSheetIOS';
+        sheet.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:9999;display:flex;align-items:center;justify-content:center';
+        sheet.innerHTML = '' +
+          '<div id="camBoxIOS" style="width:min(96vw,720px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden">' +
+            '<div id="camHeadIOS" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb">' +
+              '<b>Kamera (iOS)</b>' +
+              '<div><button id="camCloseIOS" class="btn">Kapat</button></div>' +
+            '</div>' +
+            '<div id="camMountIOS" style="position:relative;width:100%;height:380px;background:#000">' +
+              '<video id="camVideoIOS" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>' +
+            '</div>' +
+            '<div id="camFootIOS" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;background:#fafafa">' +
+              '<button id="camStopIOS" class="btn">Durdur</button>' +
+            '</div>' +
+          '</div>';
         document.body.appendChild(sheet);
+      } else {
+        sheet.style.display = 'flex';
       }
-      sheet.style.display='flex';
-      var v = document.getElementById('camVideoIOS');
 
-      async function pickRearDeviceId(){ try{ const devices=await navigator.mediaDevices.enumerateDevices(); const cams=devices.filter(d=>d.kind==='videoinput'); if(!cams.length) return null; let rear=cams.find(d=>/back|rear|environment/i.test(d.label)); return (rear||cams[cams.length-1]).deviceId; }catch(_){ return null; } }
+      var videoEl = document.getElementById('camVideoIOS');
+      if(!videoEl){
+        var cm = document.getElementById('camMountIOS');
+        videoEl = document.createElement('video');
+        videoEl.id = 'camVideoIOS';
+        videoEl.setAttribute('autoplay','');
+        videoEl.setAttribute('playsinline','');
+        videoEl.setAttribute('muted','');
+        videoEl.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
+        cm && cm.appendChild(videoEl);
+      }
+
+      async function pickRearDeviceId(){
+        try{
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const cams = devices.filter(d => d.kind === 'videoinput');
+          if(!cams.length) return null;
+          let rear = cams.find(d => /back|rear|environment/i.test(d.label));
+          return (rear || cams[cams.length-1]).deviceId;
+        }catch(_){ return null; }
+      }
+
       const rearId = await pickRearDeviceId();
-      const constraints = rearId ? { video:{ deviceId:{exact:rearId}, facingMode:'environment', width:{ideal:1280}, height:{ideal:720} } } : { video:{ facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} } };
+      const constraints = rearId
+        ? { video: { deviceId:{exact:rearId}, facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080} } }
+        : { video: { facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080} } };
+
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      v.srcObject = stream;
-      await v.play().catch(()=>{});
+      videoEl.srcObject = stream;
+      await videoEl.play().catch(()=>{});
 
       if(!window.ZXingBrowser){
-        const s=document.createElement('script');
-        s.src='https://unpkg.com/@zxing/browser@latest';
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/@zxing/browser@latest';
         await new Promise((res,rej)=>{ s.onload=res; s.onerror=rej; });
         document.head.appendChild(s);
       }
-      const reader=new window.ZXingBrowser.BrowserMultiFormatReader();
-      const tr = (v.srcObject && v.srcObject.getVideoTracks && v.srcObject.getVideoTracks()[0]) || null;
+
+      const reader = new window.ZXingBrowser.BrowserMultiFormatReader();
+      const tr = (videoEl.srcObject && videoEl.srcObject.getVideoTracks && videoEl.srcObject.getVideoTracks()[0]) || null;
       const deviceId = tr && tr.getSettings && tr.getSettings().deviceId;
 
-      await reader.decodeFromVideoDevice(deviceId || undefined, 'camVideoIOS', (result, err, controls)=>{
+      await reader.decodeFromVideoDevice(deviceId || undefined, 'camVideoIOS', (result, err, controls) => {
         if(result && result.getText){
-          const code=(result.getText()||'').toString();
+          const code = (result.getText() || '').toString();
           if(code){
             controls.stop();
-            try{ window.__lastScanSource='ios'; }catch(_){}
+            try{ window.__lastScanSource = 'ios'; }catch(_){}
             if(typeof onDetected === 'function'){ onDetected(code); }
             try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){}
-            sheet.style.display='none';
+            sheet.style.display = 'none';
           }
         }
       });
 
       function stopAll(){
         try{ reader && reader.reset && reader.reset(); }catch(_){}
-        try{ if(v && v.srcObject){ v.srcObject.getTracks().forEach(t=>t.stop()); v.srcObject=null; } }catch(_){}
+        try{ if(videoEl && videoEl.srcObject){ videoEl.srcObject.getTracks().forEach(t=>t.stop()); videoEl.srcObject=null; } }catch(_){}
         sheet.style.display='none';
       }
-      var closeBtn=document.getElementById('camCloseIOS');
-      var stopBtn=document.getElementById('camStopIOS');
-      closeBtn && closeBtn.addEventListener('click', stopAll);
-      stopBtn && stopBtn.addEventListener('click', stopAll);
+      var closeBtn = document.getElementById('camCloseIOS');
+      var stopBtn = document.getElementById('camStopIOS');
+      closeBtn && (closeBtn.onclick = stopAll);
+      stopBtn && (stopBtn.onclick = stopAll);
     }catch(e){
-      alert('iOS ZXing başlatılamadı: '+(e && e.message ? e.message : e));
+      alert('iOS kamerada okuma başlatılamadı: ' + (e && e.message ? e.message : e));
     }
   }
 
-  // bind
   (function(){
-    var btn=document.getElementById('btnCamIOS');
-    if(btn){ btn.onclick=function(ev){ ev.preventDefault(); startIOS_ZXING(); }; }
+    var btn = document.getElementById('btnCamIOS');
+    if(btn){
+      btn.onclick = function(ev){ ev.preventDefault(); startIOS_ZXING(); };
+    }
   })();
 })();
 </script>
