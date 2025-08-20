@@ -396,9 +396,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     const idx=CART.findIndex(x=>x.barcode===p.barcode);
     if(idx>-1) CART[idx].qty+=qty; else CART.push({barcode:p.barcode,name:p.name,price:p.price,isOld:!!isOldFlag,qty});
     setCart(CART); mdl.classList.remove('shown'); beep(true); refocusAfterAction(true);
-  
-  try { if (window.__lastScanSource === 'ios') { setTimeout(() => { var b=document.getElementById('btnCamIOS'); if(b) b.click(); }, 200); } } catch(_) {}
-}
+  }
 
   /* ===== CART MODAL ===== */
   function renderCart(){
@@ -690,98 +688,134 @@ async function makeLabelsDoc(){
 
 <script>
 (function(){
-  let iosReader = null;
-  let iosControls = null;
-  let iosStream = null;
+  let iosReader=null, iosControls=null, iosStream=null;
+
+  function showIosDebug(msg){
+    let chip=document.getElementById('iosDebugChip');
+    if(!chip){
+      chip=document.createElement('div');
+      chip.id='iosDebugChip';
+      chip.style.cssText='position:fixed;left:12px;bottom:12px;z-index:10000;background:rgba(17,17,17,.85);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px;max-width:70vw;';
+      document.body.appendChild(chip);
+    }
+    chip.textContent='iOS: '+msg;
+  }
+  function clearIosDebug(){ const c=document.getElementById('iosDebugChip'); if(c) c.remove(); }
 
   async function ensureZXing(){
     if(!window.ZXingBrowser){
-      const s = document.createElement('script');
-      s.src = 'https://unpkg.com/@zxing/browser@latest';
+      const s=document.createElement('script');
+      s.src='https://unpkg.com/@zxing/browser@latest';
       await new Promise((res,rej)=>{ s.onload=res; s.onerror=rej; });
       document.head.appendChild(s);
     }
     if(!iosReader){
-      const ZX = window.ZXingBrowser;
-      const hints = new Map();
-      hints.set(ZX.DecodeHintType.TRY_HARDER, true);
-      hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
-        ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A, ZX.BarcodeFormat.CODE_128, ZX.BarcodeFormat.EAN_8
-      ]);
-      iosReader = new ZX.BrowserMultiFormatReader(hints, 250);
+      const ZX=window.ZXingBrowser;
+      const hints=new Map();
+      hints.set(ZX.DecodeHintType.TRY_HARDER,true);
+      hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS,[ZX.BarcodeFormat.EAN_13,ZX.BarcodeFormat.UPC_A,ZX.BarcodeFormat.CODE_128,ZX.BarcodeFormat.EAN_8]);
+      iosReader=new ZX.BrowserMultiFormatReader(hints,250);
     }
   }
 
   function buildLayer(){
-    let layer = document.getElementById('iosScanLayer');
-    if(layer) { layer.style.display='flex'; return layer; }
-    layer = document.createElement('div');
-    layer.id = 'iosScanLayer';
-    layer.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column';
-    layer.innerHTML = ''+
-      '<div style="height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:#fff;border-bottom:1px solid #e5e7eb">'+
-        '<b style="font-family:-apple-system,system-ui,Segoe UI; font-size:16px">Kamera (iOS)</b>'+
-        '<button id="iosCloseBtn" class="btn">Kapat</button>'+
-      '</div>'+
-      '<div id="iosPreview" style="flex:1;position:relative;background:#000"></div>'+
-      '<div style="height:56px;display:flex;align-items:center;justify-content:flex-end;padding:0 12px;background:#fff;border-top:1px solid #e5e7eb">'+
-        '<button id="iosStopBtn" class="btn">Durdur</button>'+
-      '</div>';
+    let layer=document.getElementById('iosScanLayer');
+    if(layer){ layer.style.display='flex'; return layer; }
+    layer=document.createElement('div');
+    layer.id='iosScanLayer';
+    layer.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column';
+    layer.innerHTML=''
+      +'<div style="height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:#fff;border-bottom:1px solid #e5e7eb">'
+      +  '<b style="font-family:-apple-system,system-ui,Segoe UI;font-size:16px">Kamera (iOS)</b>'
+      +  '<button id="iosCloseBtn" class="btn">Kapat</button>'
+      +'</div>'
+      +'<div id="iosPreview" style="flex:1;position:relative;background:#000">'
+      +  '<div style="position:absolute;left:10%;top:20%;width:80%;height:60%;border:2px solid rgba(255,255,255,.7);border-radius:12px;box-shadow:0 0 0 200vmax rgba(0,0,0,.35);pointer-events:none"></div>'
+      +'</div>'
+      +'<div style="height:56px;display:flex;align-items:center;justify-content:flex-end;padding:0 12px;background:#fff;border-top:1px solid #e5e7eb">'
+      +  '<button id="iosStopBtn" class="btn">Durdur</button>'
+      +'</div>';
     document.body.appendChild(layer);
     return layer;
   }
 
+  async function pickRearDeviceId(){
+    try{
+      const devs=await navigator.mediaDevices.enumerateDevices();
+      const cams=devs.filter(d=>d.kind==='videoinput');
+      if(!cams.length) return null;
+      const rear=cams.find(d=>/back|rear|environment|ark|arka/i.test(d.label));
+      return (rear||cams[cams.length-1]).deviceId;
+    }catch(_){ return null; }
+  }
+
   async function startIosScanner(){
     try{
-      const layer = buildLayer();
-      const mount = document.getElementById('iosPreview');
-
-      // fresh video element (playsinline/autoplay/muted for Safari)
-      mount.innerHTML = '';
-      const video = document.createElement('video');
-      video.id = 'iosVideo';
+      const layer=buildLayer();
+      const mount=document.getElementById('iosPreview');
+      mount.innerHTML='';
+      const video=document.createElement('video');
+      video.id='iosVideo';
       video.setAttribute('playsinline','');
-      video.setAttribute('autoplay','');
+      video.setAttribute('webkit-playsinline','');
+      video.setAttribute('autoplay','autoplay');
       video.setAttribute('muted','');
-      video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
+      video.muted=true;
+      video.playsInline=true;
+      video.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000';
       mount.appendChild(video);
+
+      showIosDebug('başlatılıyor');
 
       await ensureZXing();
 
-      // choose rear camera if possible
-      async function pickRearDeviceId(){
+      // stop previous
+      try{ iosControls && iosControls.stop && iosControls.stop(); }catch(_){}
+      try{ if(iosStream){ iosStream.getTracks().forEach(t=>t.stop()); iosStream=null; } }catch(_){}
+
+      const rearId=await pickRearDeviceId();
+
+      // Constraint cascade: simplest -> HD
+      const casc=[
+        { video:{ facingMode:{ideal:'environment'} }, audio:false },
+        { video:{ deviceId: rearId?{exact:rearId}:undefined, facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} }, audio:false },
+        { video:{ deviceId: rearId?{exact:rearId}:undefined, facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080} }, audio:false }
+      ];
+
+      let stream=null, lastErr=null;
+      for(const c of casc){
         try{
-          const devs = await navigator.mediaDevices.enumerateDevices();
-          const cams = devs.filter(d => d.kind==='videoinput');
-          if(!cams.length) return null;
-          const rear = cams.find(d => /back|rear|environment/i.test(d.label));
-          return (rear || cams[cams.length-1]).deviceId;
-        }catch(_){ return null; }
+          stream=await navigator.mediaDevices.getUserMedia(c);
+          break;
+        }catch(e){ lastErr=e; }
       }
+      if(!stream) throw lastErr || new Error('Kamera açılamadı');
 
-      async function startStream(widthIdeal){
-        const rearId = await pickRearDeviceId();
-        const constraints = rearId
-          ? { video:{ deviceId:{exact:rearId}, facingMode:{ideal:'environment'}, width:{ideal:widthIdeal}, height:{ideal:Math.round(widthIdeal*9/16)} }, audio:false }
-          : { video:{ facingMode:{ideal:'environment'}, width:{ideal:widthIdeal}, height:{ideal:Math.round(widthIdeal*9/16)} }, audio:false };
-        const s = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = s;
-        await video.play().catch(()=>{});
-        return s;
-      }
+      iosStream=stream;
+      video.srcObject=stream;
 
-      // start 1920, fallback 2560 once if no result
-      iosStream = await startStream(1920);
+      // Wait for loadedmetadata for Safari
+      await new Promise((res)=>{
+        const done=()=>res();
+        if(video.readyState>=1) return res();
+        video.onloadedmetadata=done;
+        setTimeout(done, 800); // worst-case
+      });
+
+      try{ await video.play(); }catch(e){ showIosDebug('play() engellendi: '+(e&&e.message?e.message:e)); }
+
+      showIosDebug('okuma başlıyor');
 
       let got=false;
-      const onResult = (result, err, controls) => {
+      const ZX=window.ZXingBrowser;
+      const onResult=(result, err, controls)=>{
         if(result && result.getText){
-          let raw = (result.getText()||'').toString();
-          const m = raw.match(/\d{8,}/g);
-          const code = m ? m.sort((a,b)=>b.length-a.length)[0] : raw;
+          const raw=(result.getText()||'').toString();
+          const m=raw.match(/\d{8,}/g);
+          const code=m?m.sort((a,b)=>b.length-a.length)[0]:raw;
           if(code){
             got=true;
-            iosControls = controls;
+            iosControls=controls;
             try{ window.__lastScanSource='ios'; }catch(_){}
             if(typeof onDetected==='function'){ onDetected(code); }
             stopIosScanner();
@@ -789,39 +823,53 @@ async function makeLabelsDoc(){
         }
       };
 
-      iosControls = await iosReader.decodeFromVideoDevice(null, video, onResult);
+      iosControls=await iosReader.decodeFromVideoDevice(null, video, onResult);
 
+      // Safety bump to HD if no hit in 6s
       setTimeout(async ()=>{
         if(!got){
+          showIosDebug('yeniden deneme (HD)');
           try{
             iosControls && iosControls.stop && iosControls.stop();
             if(iosStream){ iosStream.getTracks().forEach(t=>t.stop()); }
-            iosStream = await startStream(2560);
-            iosControls = await iosReader.decodeFromVideoDevice(null, video, onResult);
-          }catch(_){}
+            const hd={ video:{ deviceId: rearId?{exact:rearId}:undefined, facingMode:{ideal:'environment'}, width:{ideal:2560}, height:{ideal:1440} }, audio:false };
+            iosStream=await navigator.mediaDevices.getUserMedia(hd);
+            video.srcObject=iosStream;
+            await video.play().catch(()=>{});
+            iosControls=await iosReader.decodeFromVideoDevice(null, video, onResult);
+          }catch(e){ showIosDebug('HD yeniden deneme hatası: '+(e&&e.message?e.message:e)); }
         }
-      }, 5000);
+      }, 6000);
 
-      const closeBtn = document.getElementById('iosCloseBtn');
-      const stopBtn = document.getElementById('iosStopBtn');
-      closeBtn && (closeBtn.onclick = stopIosScanner);
-      stopBtn  && (stopBtn.onclick  = stopIosScanner);
+      // Close/stop
+      const stopAll=()=>{
+        try{ iosControls && iosControls.stop && iosControls.stop(); }catch(_){}
+        try{ if(iosStream){ iosStream.getTracks().forEach(t=>t.stop()); iosStream=null; } }catch(_){}
+        layer.style.display='none';
+        clearIosDebug();
+      };
+      const closeBtn=document.getElementById('iosCloseBtn');
+      const stopBtn=document.getElementById('iosStopBtn');
+      closeBtn && (closeBtn.onclick=stopAll);
+      stopBtn && (stopBtn.onclick=stopAll);
+
     }catch(e){
-      alert('iOS kamera açılamadı: ' + (e && e.message ? e.message : e));
+      showIosDebug('Hata: '+(e&&e.message?e.message:e));
+      alert('iOS kamera hatası: '+(e&&e.message?e.message:e));
     }
   }
 
   function stopIosScanner(){
     try{ iosControls && iosControls.stop && iosControls.stop(); }catch(_){}
     try{ if(iosStream){ iosStream.getTracks().forEach(t=>t.stop()); iosStream=null; } }catch(_){}
-    const layer = document.getElementById('iosScanLayer');
-    if(layer) layer.style.display='none';
+    const layer=document.getElementById('iosScanLayer'); if(layer) layer.style.display='none';
+    clearIosDebug();
   }
 
-  // Bind iOS button
+  // Bind
   (function(){
-    const btn = document.getElementById('btnCamIOS');
-    if(btn){ btn.onclick = function(ev){ ev.preventDefault(); startIosScanner(); }; }
+    const btn=document.getElementById('btnCamIOS');
+    if(btn){ btn.onclick=function(ev){ ev.preventDefault(); startIosScanner(); }; }
   })();
 })();
 </script>
