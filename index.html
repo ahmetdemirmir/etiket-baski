@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fiyat Gör Etiket Bas — TAM SÜRÜM (28/sayfa fix)</title>
+<title>Fiyat Gör Etiket Bas — 24/sayfa • yüksek çözünürlük • FINAL <!-- v2 --> <!-- v3 --> <!-- v4 --></title>
 
 <!-- Icons & Libs -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
@@ -84,16 +84,39 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 
 /* Label template (UI gösterim için — PDF çizimini jsPDF ile yapıyoruz) */
 #etiketler{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
-.etiket{background:#fff;width:260px;height:100px;border-radius:14px;box-shadow:0 1px 6px #d7d7db55;display:flex;flex-direction:row;align-items:flex-start;padding:12px 12px 8px 6px;box-sizing:border-box;position:relative}
-.etiket-logo{width:60px;height:78px;margin-right:5px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:flex-start}
+.etiket{background:#fff;width:280px;height: 110px;border-radius:14px;box-shadow:0 1px 6px #d7d7db55;display:flex;flex-direction:row;align-items:flex-start;padding:12px 12px 8px 6px;box-sizing:border-box;position:relative}
+.etiket-logo{width:70px;height: 90px;margin-right:5px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:flex-start}
 .etiket-logo img{width:100%;height:100%;object-fit:contain}
 .etiket-icerik{flex:1;display:flex;flex-direction:column;justify-content:space-between;height:100%}
-.etiket-stokadi{font-size:12px;font-weight:500;color:#2e2e2e;line-height:1.1;min-height:36px;max-height:32px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.etiket-stokadi{font-size:13px;font-weight:500;color:#2e2e2e;line-height:1.1;min-height:36px;max-height:32px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .etiket-row{display:flex;align-items:flex-end;justify-content:flex-end;gap:4px}
-.etiket-fiyat{font-size:24px;color:#e20032;font-weight:650;letter-spacing:1px;margin:0;display:flex;align-items:flex-end;gap:2px;min-width:52px;justify-content:flex-end}
-.etiket-fiyat .tlsimge{font-size:14px;margin-left:1px}
-.etiket-barkod{width:72px;height:45px;display:flex;flex-direction:column;align-items:flex-end}
-.etiket-barkod img{width:100%;height:36px;object-fit:contain}
+.etiket-fiyat{font-size:26px;color:#e20032;font-weight:650;letter-spacing:1px;margin:0;display:flex;align-items:flex-end;gap:2px;min-width:52px;justify-content:center}
+.etiket-fiyat .tlsimge{font-size:15px;margin-left:1px}
+.etiket-barkod{width:72px;height:54px;display:flex;flex-direction:column;align-items:flex-end}
+.etiket-barkod img{width:100%;height:44px;object-fit:contain}
+
+
+/* Akıllı tipografi iyileştirmeleri */
+.etiket-fiyat{font-variant-numeric: tabular-nums; display:flex; align-items:flex-end; justify-content:center}
+/* Fiyat bloğu başlık + değer sütunu */
+.etiket-fiyat-wrap{display:flex;flex-direction:column;align-items:center;gap:2px}
+.etiket-fiyat-etiket{font-size:12px;color:#111;font-weight:600;letter-spacing:.2px}
+/* Eski Fiyat Rozeti (etiketin sol-üst köşesi) */
+.etiket-badge{
+  position:absolute; left:6px; top:6px;
+  padding:2px 6px; border-radius:6px;
+  font-size:11px; font-weight:800; line-height:1;
+  color:#7f1d1d; background:#fee2e2; border:1px solid #fecaca;
+  box-shadow:0 1px 2px rgba(0,0,0,.08);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.etiket-badge i{ font-style:normal; margin-right:4px }
+
+
+
+/* Inline eski fiyat ikonu (caption yanında) */
+.old-ico{margin-left:6px; font-size:12px; display:inline-flex; align-items:center; line-height:1}
+.etiket-fiyat-etiket{text-align:center}
 
 /* FD 10 gün liste */
 .groupCard{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px}
@@ -237,7 +260,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   
 
 // === LAYOUT CONFIG (27/sayfa) ===
-const LABELS_PER_PAGE = { cols: 3, rows: 9, gapPx: 4, pagePaddingPx: 10 }; // 3x9=27
+const LABELS_PER_PAGE = { cols: 3, rows: 8, gapPx: 6, pagePaddingPx: 12 }; // 3x8=24; // 3x9=27
 
 // Helper to build a page grid with scaled original DOM
 async function renderPageWithOriginalDOM(doc, labelsSlice){
@@ -326,7 +349,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
   const monthsDiff=(d)=>((new Date())-d)/(1000*60*60*24*30);
   const showToast=(msg)=>{const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);};
   const beep=(ok=true)=>{ if(!FX) return; try{const a=new (window.AudioContext||window.webkitAudioContext)();const o=a.createOscillator();o.type='sine';o.frequency.value=ok?880:220;const g=a.createGain();g.gain.setValueAtTime(0.04,a.currentTime);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+0.12);}catch(e){} if(navigator.vibrate) navigator.vibrate(ok?[100]:[80,60,80]); };
-  const refocusAfterAction=(clear=false)=>{ if(IS_DESKTOP){ if(clear){ inpBarcode.value=''; inpName.value=''; } inpBarcode.focus(); inpBarcode.select(); } };
+  const refocusAfterAction=(clear=false)=>{if(IS_DESKTOP){ if(clear){ inpBarcode.value=''; inpName.value=''; } inpBarcode.focus(); inpBarcode.select(); } if(!IS_DESKTOP){ setTimeout(()=>{ try{ if(typeof safeRestart==='function'){ safeRestart(); } else if(typeof startCamera==='function'){ startCamera(); } }catch(_){} },300); } };
   const fmtDMY=(d)=>{ try{const dt=(d instanceof Date)?d:new Date(d); if(isNaN(dt))return '—'; const dd=String(dt.getDate()).padStart(2,'0'); const mm=String(dt.getMonth()+1).padStart(2,'0'); const yy=dt.getFullYear(); return `${dd}/${mm}/${yy}`;}catch(_){ return '—'; }};
   const fromSci=(str)=>{const m=String(str).toLowerCase().match(/^(\d+(?:\.\d+)?)e\+(\d+)$/);if(!m) return String(str);const d=m[1].replace('.','');const dec=(m[1].split('.')[1]||'').length;const exp=+m[2];return d+'0'.repeat(Math.max(0,exp-dec));};
   function parseBarcode(v){ if(v===undefined||v===null)return''; if(typeof v==='number'){const s=String(v);return s.includes('e+')?fromSci(s).replace(/\D/g,''):s.replace(/\D/g,'');} const s=String(v).trim(); if(/e\+\d+$/i.test(s)) return fromSci(s).replace(/\D/g,''); return s.replace(/[^0-9]/g,''); }
@@ -422,16 +445,57 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     // UI önizleme için HTML etiket şablonu (PDF çiziminden bağımsız)
     const canvas=document.createElement('canvas');
     const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
-    JsBarcode(canvas,it.barcode,{format:fmt,height:44,width:2,displayValue:true,font:'Arial',fontSize:12,textMargin:2,margin:0,lineColor:'#000'});
+    const spacedText = (String(it.barcode||'').replace(/\D/g,''))
+  .split('')
+  .join(' ');
+JsBarcode(canvas,it.barcode,{format:fmt,height:30,width:2.2, text: spacedText, textAlign:'center',displayValue:true, textMargin:3,font:'Arial',fontSize:14,textMargin:2,margin:0,lineColor:'#000'});
     const barPng=canvas.toDataURL('image/jpeg',0.82);
     const priceStr=fmtTRY.format(it.price).replace('₺','');
     const wrap=document.createElement('div');
     wrap.className='etiket';
-    wrap.innerHTML=`<div class="etiket-logo"><img src="logo.png" alt="Logo" crossorigin="anonymous"></div>
+    const isOld = !!it.isOld;
+const ico = isOld ? '<span class="old-ico">🎯</span>' : '';
+wrap.innerHTML=`<div class="etiket-logo"><img src="logo.png" alt="Logo" crossorigin="anonymous"></div>
     <div class="etiket-icerik">
       <div class="etiket-stokadi">${it.name}</div>
-      <div class="etiket-row"><div class="etiket-fiyat">${priceStr} <span class="tlsimge">₺</span></div>
-      <div class="etiket-barkod"><img src="${barPng}" alt="Barkod"></div></div></div>`;
+      <div class="etiket-row">
+        <div class="etiket-fiyat-wrap">
+          <div class="etiket-fiyat-etiket">Satış Fiyatı <span class="old-ico" style="display:${isOld?'inline-flex':'none'}">🎯</span></div>
+          <div class="etiket-fiyat">${priceStr} <span class="tlsimge">₺</span></div>
+        </div>
+        <div class="etiket-barkod"><img src="${barPng}" alt="Barkod"></div>
+      </div>
+    </div>`;
+try{
+  const nameEl = wrap.querySelector('.etiket-stokadi');
+  if(nameEl){
+    const L = (it.name||'').length;
+    let fs = 13;
+    if(L <= 10) fs = 14; else if(L >= 28) fs = 11; else if(L >= 20) fs = 12;
+    nameEl.style.fontSize = fs + 'px';
+  }
+}catch(_){ }
+try{
+  const priceEl = wrap.querySelector('.etiket-fiyat');
+  if(priceEl){
+    const raw = (it.price!=null?Number(it.price):0);
+    const abs = Math.floor(Math.abs(raw));
+    const digits = String(abs).length; // integer basamak sayısı
+    let fs = 26; // default (orta)
+    if(digits <= 1) fs = 28;           // 7,50 → büyük
+    else if(digits == 2) fs = 26;      // 17,50 → orta
+    else if(digits == 3) fs = 24;      // 177,50 → orta-alt
+    else fs = 26;                       // 1777,50 → tekrar orta
+    priceEl.style.fontSize = fs + 'px';
+    // Shrink-to-fit safety: never overflow container
+    const minFs = 22;
+    let guard = 0;
+    while(guard++ < 8 && priceEl.scrollWidth > priceEl.clientWidth && fs > minFs){
+      fs -= 1; priceEl.style.fontSize = fs + 'px';
+    }
+  }
+}catch(_){ }
+
     return wrap;
   }
 
@@ -527,7 +591,7 @@ async function makeLabelsDoc(){
     const pageNode = await renderPageWithOriginalDOM(doc, slice.filter(Boolean));
     work.appendChild(pageNode);
 
-    const canvas = await html2canvas(pageNode,{scale:3,useCORS:true,allowTaint:true,background:'#fff'});
+    const canvas = await html2canvas(pageNode,{scale:5,useCORS:true,allowTaint:true,background:'#fff'});
     const img = canvas.toDataURL('image/jpeg',0.92);
     doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
 
