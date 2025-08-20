@@ -234,7 +234,78 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 
 <script>
 (function(){
-  /* ===== STATE ===== */
+  
+
+// === LAYOUT CONFIG (27/sayfa) ===
+const LABELS_PER_PAGE = { cols: 3, rows: 9, gapPx: 4, pagePaddingPx: 10 }; // 3x9=27
+
+// Helper to build a page grid with scaled original DOM
+async function renderPageWithOriginalDOM(doc, labelsSlice){
+  const pagePxW = 794;   // ~ A4 @96dpi equivalence for html2canvas
+  const pagePxH = 1123;
+  const pad = LABELS_PER_PAGE.pagePaddingPx;
+  const gap = LABELS_PER_PAGE.gapPx;
+  const cols = LABELS_PER_PAGE.cols;
+  const rows = LABELS_PER_PAGE.rows;
+  const cellW = Math.floor((pagePxW - pad*2 - gap*(cols-1)) / cols);
+  const cellH = Math.floor((pagePxH - pad*2 - gap*(rows-1)) / rows);
+
+  const page = document.createElement('div');
+  page.style.cssText = `width:${pagePxW}px;height:${pagePxH}px;display:grid;grid-template-columns:repeat(${cols},${cellW}px);grid-auto-rows:${cellH}px;gap:${gap}px;padding:${pad}px;background:#fff;`;
+
+  // We render each label into a sized cell and scale its internal DOM to fit
+  for(const it of labelsSlice){
+    const cell = document.createElement('div');
+    cell.style.cssText = "position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:6px;";
+
+    let node=null;
+    try{
+      if(typeof window.renderOriginalLabel === 'function'){
+        node = window.renderOriginalLabel(it);
+      }
+    }catch(e){ node = null; }
+    if(!node && typeof buildLabelNode === 'function'){
+      node = buildLabelNode(it);
+    }
+    if(!node){
+      node = document.createElement('div');
+      node.textContent = (it?.name||'') + ' — ' + (new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(it?.price||0));
+      node.style.cssText="font:12px Arial;padding:6px";
+    }
+
+    // measure natural size by temporarily attaching offscreen
+    const off = document.createElement('div');
+    off.style.cssText="position:absolute;left:-10000px;top:-10000px;opacity:0;";
+    off.appendChild(node);
+    document.body.appendChild(off);
+    const rect = node.getBoundingClientRect();
+    const naturalW = Math.max(1, rect.width);
+    const naturalH = Math.max(1, rect.height);
+    document.body.removeChild(off);
+
+    // compute scale to fit into cellW x cellH with minimal whitespace
+    const scale = Math.min(cellW / naturalW, cellH / naturalH);
+
+    // wrap in scaler to keep exact cell size
+    const scaler = document.createElement('div');
+    scaler.style.cssText = `width:${Math.round(naturalW*scale)}px;height:${Math.round(naturalH*scale)}px;transform-origin:top left;`;
+    // Instead of transform scaling the node (which may blur),
+    // we can set zoom-like scale via CSS transforms:
+    node.style.transformOrigin = "top left";
+    node.style.transform = `scale(${scale})`;
+    scaler.appendChild(node);
+
+    // center within the cell
+    const holder = document.createElement('div');
+    holder.style.cssText = "position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;";
+    holder.appendChild(scaler);
+    cell.appendChild(holder);
+    page.appendChild(cell);
+  }
+  return page;
+}
+
+/* ===== STATE ===== */
   let PRODUCTS=[]; 
   let CART = JSON.parse(localStorage.getItem('etiket_cart')||'[]');
   let FX = JSON.parse(localStorage.getItem('etiket_fx')||'true');
@@ -432,73 +503,34 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   });
 
   
+
 async function makeLabelsDoc(){
   const { jsPDF }=window.jspdf;
-  // A4 sayfa ve 4x7 grid (sayfa başına 28 etiket) — sayfalama FIX
+  // A4 doc in mm
   const A4W=210, A4H=297, margin=5;
-  const cols=4, rows=7; // 28/sayfa
-  const gridW=A4W - margin*2, gridH=A4H - margin*2;
-  const colW=gridW/cols, rowH=gridH/rows;
 
-  // Etiketleri sıraya diz
+  // Flatten labels
   const labels=[]; CART.forEach(it=>{ for(let i=0;i<it.qty;i++) labels.push(it); });
-  const per=cols*rows; const pages=Math.max(1, Math.ceil(labels.length/per));
+  const per = (LABELS_PER_PAGE.cols * LABELS_PER_PAGE.rows); // 27/sayfa
+  const pages = Math.max(1, Math.ceil(labels.length / per));
+  const doc = new jsPDF({unit:'mm',format:'a4'});
 
-  const doc=new jsPDF({unit:'mm',format:'a4'});
-
-  // === ÖNEMLİ: Orijinal görünümü koru ===
-  // Eğer projede 'renderOriginalLabel' fonksiyonu tanımlıysa onu kullan.
-  // Değilse, aşağıdaki fallback (mevcut buildLabelNode) devreye girer.
-  const useOriginal = (typeof window.renderOriginalLabel === 'function');
-
-  // Çalışma alanı
   const work = document.getElementById('work') || (()=>{const d=document.createElement('div'); d.id='work'; d.style.cssText='position:fixed;left:-9999px;top:-9999px;opacity:0'; document.body.appendChild(d); return d;})();
   work.innerHTML='';
 
-  let idx=0;
-  for(let p=0;p<pages;p++){
+  for(let p=0; p<pages; p++){
     if(p>0) doc.addPage();
+    const slice = labels.slice(p*per, p*per + per);
+    // if slice shorter, fill with placeholders to keep grid alignment
+    while(slice.length < per) slice.push(null);
 
-    // Her sayfa için bir grid oluştur
-    const page=document.createElement('div');
-    page.style.cssText='width:794px;height:1123px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px;background:#fff';
+    const pageNode = await renderPageWithOriginalDOM(doc, slice.filter(Boolean));
+    work.appendChild(pageNode);
 
-    for(let r=0;r<rows;r++){
-      for(let c=0;c<cols;c++){
-        const holder=document.createElement('div');
-        holder.style.cssText='display:flex;align-items:center;justify-content:center;border:1px dashed #e5e7eb;border-radius:8px;background:#fff';
-        const it=labels[idx++];
-        if(it){
-          let node = null;
-          try{
-            if(useOriginal){
-              // Projenin kendi orijinal etiket DOM’unu döndürmesi beklenir
-              node = window.renderOriginalLabel(it);
-            }
-          }catch(e){ node = null; }
-          if(!node){
-            // Fallback: mevcut buildLabelNode (bizim daha önceki şablon), sadece görünüm bozulmasın diye minimum müdahale ile.
-            if(typeof buildLabelNode === 'function') node = buildLabelNode(it);
-          }
-          // Son çare: basit metin (asla boş bırakma)
-          if(!node){
-            node = document.createElement('div');
-            node.style.cssText='font:12px Arial;padding:8px';
-            node.textContent = it.name + ' — ' + (new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(it.price));
-          }
-          holder.appendChild(node);
-        }
-        page.appendChild(holder);
-      }
-    }
-    work.appendChild(page);
-
-    // Sayfayı html2canvas ile JPG’e dönüştür ve PDF’e ekle
-    const canvas = await html2canvas(page,{scale:3,useCORS:true,allowTaint:true,background:'#fff'});
-    const img = canvas.toDataURL('image/jpeg',0.9);
+    const canvas = await html2canvas(pageNode,{scale:3,useCORS:true,allowTaint:true,background:'#fff'});
+    const img = canvas.toDataURL('image/jpeg',0.92);
     doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
 
-    // Alt bilgi (son sayfa büyük, ara sayfalarda küçük not)
     if(p===pages-1){
       const total = CART.reduce((a,x)=>a+x.qty,0);
       const oldCount = CART.reduce((a,x)=>a+(x.isOld?x.qty:0),0);
