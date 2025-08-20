@@ -746,5 +746,107 @@ async function makeLabelsDoc(){
 
 })();
 </script>
+
+<!-- AUTO-RESTART-CAMERA PATCH -->
+<script>
+// ===== AUTO-RESTART-CAMERA PATCH (21.08) =====
+// Bu yama, ürün popup'ı kapandıktan sonra kamerayı otomatik yeniden başlatır.
+// Minimal ve invazif olmayan şekilde çalışır.
+
+(function(){
+  // iOS tespiti
+  const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  // Bir defalık tetikleyici guard
+  let restartLock = false;
+  function autoRestartCamera(){ 
+    if (restartLock) return;
+    restartLock = true;
+    // Modal kapanış animasyonlarına nefes
+    setTimeout(() => {
+      try {
+        // 1) Doğrudan global fonksiyonlar (varsa)
+        const fns = [
+          'startCamera','startCam','openCamera','initCamera',
+          'startIOS','startCamIOS','openCameraIOS'
+        ];
+        for (const fn of fns) {
+          if (typeof window[fn] === 'function') { 
+            window[fn](); 
+            restartLock = false; 
+            return; 
+          }
+        }
+        // 2) Buton tetikleme (farklı id olasılıkları)
+        const ids = isiOS 
+          ? ['btnCamIOS','btnIOSCam','openCamIOS','openCameraIOS','iosCamBtn']
+          : ['btnCam','btnCamera','openCam','openCamera','androidCamBtn'];
+        for (const id of ids) {
+          const el = document.getElementById(id);
+          if (el) { el.click(); restartLock = false; return; }
+        }
+        // 3) Son çare: kamerayı aç yazılı butonları ara
+        const candidates = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+        const kw = isiOS ? /ios|kamera|cam/i : /android|kamera|cam/i;
+        for (const el of candidates) {
+          const t = (el.textContent || el.getAttribute('aria-label') || '').trim();
+          if (kw.test(t)) { el.click(); restartLock = false; return; }
+        }
+      } catch(e) {
+        // Sessiz düş
+      }
+      restartLock = false;
+    }, 250);
+  }
+
+  // Modal görünürlük takipçisi
+  function isVisible(el) {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const shownByClass = el.classList.contains('shown') || el.classList.contains('open') || el.classList.contains('active');
+    return (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') || shownByClass;
+  }
+
+  // Modal'ı saptamaya çalış (id / class olasılıkları)
+  function guessModals() {
+    const ids = ['productModal','modal','mdl','urunModal','pop','popup','dialog'];
+    const els = new Set();
+    ids.forEach(id => { const e = document.getElementById(id); if (e) els.add(e); });
+    document.querySelectorAll('.modal, .popup, .dialog').forEach(e => els.add(e));
+    return Array.from(els);
+  }
+
+  // Kapanış anını yakalamak için MutationObserver
+  const observer = new MutationObserver(() => {
+    const modals = guessModals();
+    if (!modals.length) return;
+    const anyOpen = modals.some(isVisible);
+    // Kapalı hale geldiğini görürsek tetikle
+    if (!anyOpen) autoRestartCamera();
+  });
+
+  // Body'yi izle
+  const startObserving = () => { 
+    try { observer.observe(document.body, { attributes: true, childList: true, subtree: true }); } catch(_){} 
+  };
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', startObserving); }
+  else { startObserving(); }
+
+  // Güvenli ağ: add & cancel butonlarına da bağlan (varsa)
+  const wireButtons = () => {
+    const btnIds = ['btnAddOne','btnAdd','btnAddCustom','btnIptal','btnCancel','btnClose'];
+    btnIds.forEach(id=>{
+      const el = document.getElementById(id);
+      if (el && !el._autoRestartBound) {
+        el.addEventListener('click', () => setTimeout(autoRestartCamera, 10));
+        el._autoRestartBound = true;
+      }
+    });
+  };
+  setInterval(wireButtons, 500); // Dinamik DOM için basit poll
+
+})();
+</script>
+
 </body>
 </html>
