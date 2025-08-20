@@ -118,14 +118,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .old-ico{margin-left:6px; font-size:12px; display:inline-flex; align-items:center; line-height:1}
 .etiket-fiyat-etiket{text-align:center}
 
-
-/* === Price caption + inline old icon === */
-.etiket-fiyat-wrap{display:flex;flex-direction:column;align-items:center;gap:2px}
-.etiket-fiyat-etiket{font-size:12px;color:#111;font-weight:600;letter-spacing:.2px;text-align:center}
-.old-ico{margin-left:6px;font-size:12px;display:inline-flex;align-items:center;line-height:1}
-/* Numbers: equal width for nicer alignment */
-.etiket-fiyat{font-variant-numeric: tabular-nums; display:flex; align-items:flex-end; justify-content:center}
-
 /* FD 10 gün liste */
 .groupCard{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px}
 .groupCard .ttl{font-weight:900}
@@ -268,7 +260,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   
 
 // === LAYOUT CONFIG (27/sayfa) ===
-const LABELS_PER_PAGE = { cols: 3, rows: 8, gapPx: 6, pagePaddingPx: 12 }; // 24/sayfa; // 3x8=24; // 3x9=27
+const LABELS_PER_PAGE = { cols: 3, rows: 8, gapPx: 6, pagePaddingPx: 12 }; // 3x8=24; // 3x9=27
 
 // Helper to build a page grid with scaled original DOM
 async function renderPageWithOriginalDOM(doc, labelsSlice){
@@ -420,7 +412,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     mdl.classList.add('shown');
     mdl.querySelectorAll('[data-qty]').forEach(b=> b.onclick=()=> addToCart(p,parseInt(b.dataset.qty),old));
     $('btnCustom').onclick=()=>{ const q=parseInt(prompt('Kaç adet?','1')); if(q>0) addToCart(p,q,old); };
-    $('btnCancel').onclick=()=>{ mdl.classList.remove('shown'); setTimeout(()=>{ try{ if(!IS_DESKTOP && typeof safeRestart==='function') safeRestart(); else if(!IS_DESKTOP && typeof startCamera==='function') startCamera(); }catch(_){} },300); refocusAfterAction(true); };
+    $('btnCancel').onclick=()=>{ mdl.classList.remove('shown'); refocusAfterAction(true); };
   }
   function addToCart(p,qty,isOldFlag){
     if(qty>=10 && !confirm('⚠️ Bu üründen 10 adet seçtiniz, emin misiniz?')) return;
@@ -453,49 +445,24 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     // UI önizleme için HTML etiket şablonu (PDF çiziminden bağımsız)
     const canvas=document.createElement('canvas');
     const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
-    JsBarcode(canvas,it.barcode,{format:fmt,height:25,width:2.2,displayValue:true,font:'Arial',fontSize:14,textMargin:3,margin:0,lineColor:'#000'});
+    JsBarcode(canvas,it.barcode,{format:fmt,height:48,width:2.2,displayValue:true,font:'Arial',fontSize:14,textMargin:2,margin:0,lineColor:'#000'});
     const barPng=canvas.toDataURL('image/jpeg',0.82);
     const priceStr=fmtTRY.format(it.price).replace('₺','');
     const wrap=document.createElement('div');
     wrap.className='etiket';
     const isOld = !!it.isOld;
 const ico = isOld ? '<span class="old-ico">🎯</span>' : '';
-const isOld = !!it.isOld;
-const ico = isOld ? '<span class="old-ico">🎯</span>' : '';
 wrap.innerHTML=`<div class="etiket-logo"><img src="logo.png" alt="Logo" crossorigin="anonymous"></div>
-  <div class="etiket-icerik">
-    <div class="etiket-stokadi">${it.name}</div>
-    <div class="etiket-row">
-      <div class="etiket-fiyat-wrap">
-        <div class="etiket-fiyat-etiket">Satış Fiyatı ${ico}</div>
-        <div class="etiket-fiyat">${priceStr} <span class="tlsimge">₺</span></div>
+    <div class="etiket-icerik">
+      <div class="etiket-stokadi">${it.name}</div>
+      <div class="etiket-row">
+        <div class="etiket-fiyat-wrap">
+          <div class="etiket-fiyat-etiket">Satış Fiyatı <span class="old-ico" style="display:${isOld?'inline-flex':'none'}">🎯</span></div>
+          <div class="etiket-fiyat">${priceStr} <span class="tlsimge">₺</span></div>
+        </div>
+        <div class="etiket-barkod"><img src="${barPng}" alt="Barkod"></div>
       </div>
-      <div class="etiket-barkod"><img src="${barPng}" alt="Barkod"></div>
-    </div>
-  </div>`;
-
-try{
-  const nameEl = wrap.querySelector('.etiket-stokadi');
-  if(nameEl){
-    const L = (it.name||'').length; let fs = 13;
-    if(L <= 10) fs = 14; else if(L >= 28) fs = 11; else if(L >= 20) fs = 12;
-    nameEl.style.fontSize = fs + 'px';
-  }
-  const priceEl = wrap.querySelector('.etiket-fiyat');
-  if(priceEl){
-    const raw = (it.price!=null?Number(it.price):0);
-    const digits = String(Math.floor(Math.abs(raw))).length;
-    let fs = 26;
-    if(digits <= 1) fs = 28;
-    else if(digits == 2) fs = 26;
-    else if(digits == 3) fs = 24;
-    else fs = 26;
-    priceEl.style.fontSize = fs + 'px';
-    let guard=0; const minFs=22;
-    while(guard++<8 && priceEl.scrollWidth>priceEl.clientWidth && fs>minFs){ fs--; priceEl.style.fontSize = fs + 'px'; }
-  }
-}catch(_){}
-
+    </div>`;
 try{
   const nameEl = wrap.querySelector('.etiket-stokadi');
   if(nameEl){
