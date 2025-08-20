@@ -690,81 +690,89 @@ async function makeLabelsDoc(){
 
 <script>
 (function(){
-  // --- iOS Scanner (ZXing-first, fullscreen overlay) ---
+  let iosReader = null;
   let iosControls = null;
   let iosStream = null;
 
-  async function startIosScanner(){
-    try{
-      // Build fullscreen overlay
-      let layer = document.getElementById('iosScanLayer');
-      if(!layer){
-        layer = document.createElement('div');
-        layer.id = 'iosScanLayer';
-        layer.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column';
-        layer.innerHTML = ''+
-          '<div style="height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:#fff;border-bottom:1px solid #e5e7eb">'+
-            '<b style="font-family:system-ui, -apple-system, Segoe UI; font-size:16px">Kamera (iOS)</b>'+
-            '<button id="iosCloseBtn" class="btn">Kapat</button>'+
-          '</div>'+
-          '<div style="flex:1;position:relative;background:#000">'+
-            '<video id="iosVideo" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>'+
-            '<div style="position:absolute;left:10%;top:20%;width:80%;height:60%;border:2px solid rgba(255,255,255,.7);border-radius:12px;box-shadow:0 0 0 200vmax rgba(0,0,0,.35);pointer-events:none"></div>'+
-          '</div>'+
-          '<div style="height:56px;display:flex;align-items:center;justify-content:flex-end;padding:0 12px;background:#fff;border-top:1px solid #e5e7eb">'+
-            '<button id="iosStopBtn" class="btn">Durdur</button>'+
-          '</div>';
-        document.body.appendChild(layer);
-      } else {
-        layer.style.display = 'flex';
-      }
-
-      const videoEl = document.getElementById('iosVideo');
-
-      // Pick rear camera if possible
-      async function pickRearDeviceId(){
-        try{
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const cams = devices.filter(d => d.kind === 'videoinput');
-          if(!cams.length) return null;
-          const rear = cams.find(d => /back|rear|environment/i.test(d.label));
-          return (rear || cams[cams.length-1]).deviceId;
-        }catch(_){ return null; }
-      }
-
-      // Start stream at high quality
-      async function startStream(widthIdeal){
-        const rearId = await pickRearDeviceId();
-        const constraints = rearId
-          ? { video:{ deviceId:{exact:rearId}, facingMode:{ideal:'environment'}, width:{ideal:widthIdeal}, height:{ideal:Math.round(widthIdeal*9/16)} } }
-          : { video:{ facingMode:{ideal:'environment'}, width:{ideal:widthIdeal}, height:{ideal:Math.round(widthIdeal*9/16)} } };
-        const s = await navigator.mediaDevices.getUserMedia(constraints);
-        videoEl.srcObject = s;
-        await videoEl.play().catch(()=>{});
-        return s;
-      }
-
-      // Load ZXing once
-      if(!window.ZXingBrowser){
-        const sc = document.createElement('script');
-        sc.src = 'https://unpkg.com/@zxing/browser@latest';
-        await new Promise((res, rej)=>{ sc.onload = res; sc.onerror = rej; });
-        document.head.appendChild(sc);
-      }
-
-      // Start camera stream
-      iosStream = await startStream(1920);
-
-      // Prepare ZXing reader with hints
+  async function ensureZXing(){
+    if(!window.ZXingBrowser){
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/@zxing/browser@latest';
+      await new Promise((res,rej)=>{ s.onload=res; s.onerror=rej; });
+      document.head.appendChild(s);
+    }
+    if(!iosReader){
       const ZX = window.ZXingBrowser;
       const hints = new Map();
       hints.set(ZX.DecodeHintType.TRY_HARDER, true);
       hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
         ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.UPC_A, ZX.BarcodeFormat.CODE_128, ZX.BarcodeFormat.EAN_8
       ]);
-      const reader = new ZX.BrowserMultiFormatReader(hints, 250);
+      iosReader = new ZX.BrowserMultiFormatReader(hints, 250);
+    }
+  }
 
-      // Decode callback
+  function buildLayer(){
+    let layer = document.getElementById('iosScanLayer');
+    if(layer) { layer.style.display='flex'; return layer; }
+    layer = document.createElement('div');
+    layer.id = 'iosScanLayer';
+    layer.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column';
+    layer.innerHTML = ''+
+      '<div style="height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:#fff;border-bottom:1px solid #e5e7eb">'+
+        '<b style="font-family:-apple-system,system-ui,Segoe UI; font-size:16px">Kamera (iOS)</b>'+
+        '<button id="iosCloseBtn" class="btn">Kapat</button>'+
+      '</div>'+
+      '<div id="iosPreview" style="flex:1;position:relative;background:#000"></div>'+
+      '<div style="height:56px;display:flex;align-items:center;justify-content:flex-end;padding:0 12px;background:#fff;border-top:1px solid #e5e7eb">'+
+        '<button id="iosStopBtn" class="btn">Durdur</button>'+
+      '</div>';
+    document.body.appendChild(layer);
+    return layer;
+  }
+
+  async function startIosScanner(){
+    try{
+      const layer = buildLayer();
+      const mount = document.getElementById('iosPreview');
+
+      // fresh video element (playsinline/autoplay/muted for Safari)
+      mount.innerHTML = '';
+      const video = document.createElement('video');
+      video.id = 'iosVideo';
+      video.setAttribute('playsinline','');
+      video.setAttribute('autoplay','');
+      video.setAttribute('muted','');
+      video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
+      mount.appendChild(video);
+
+      await ensureZXing();
+
+      // choose rear camera if possible
+      async function pickRearDeviceId(){
+        try{
+          const devs = await navigator.mediaDevices.enumerateDevices();
+          const cams = devs.filter(d => d.kind==='videoinput');
+          if(!cams.length) return null;
+          const rear = cams.find(d => /back|rear|environment/i.test(d.label));
+          return (rear || cams[cams.length-1]).deviceId;
+        }catch(_){ return null; }
+      }
+
+      async function startStream(widthIdeal){
+        const rearId = await pickRearDeviceId();
+        const constraints = rearId
+          ? { video:{ deviceId:{exact:rearId}, facingMode:{ideal:'environment'}, width:{ideal:widthIdeal}, height:{ideal:Math.round(widthIdeal*9/16)} }, audio:false }
+          : { video:{ facingMode:{ideal:'environment'}, width:{ideal:widthIdeal}, height:{ideal:Math.round(widthIdeal*9/16)} }, audio:false };
+        const s = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = s;
+        await video.play().catch(()=>{});
+        return s;
+      }
+
+      // start 1920, fallback 2560 once if no result
+      iosStream = await startStream(1920);
+
       let got=false;
       const onResult = (result, err, controls) => {
         if(result && result.getText){
@@ -775,35 +783,31 @@ async function makeLabelsDoc(){
             got=true;
             iosControls = controls;
             try{ window.__lastScanSource='ios'; }catch(_){}
-            if(typeof onDetected === 'function'){ onDetected(code); }
-            stopIosScanner(); // close overlay & stop stream
+            if(typeof onDetected==='function'){ onDetected(code); }
+            stopIosScanner();
           }
         }
       };
 
-      // Begin continuous decode (bind to element)
-      iosControls = await reader.decodeFromVideoDevice(null, videoEl, onResult);
+      iosControls = await iosReader.decodeFromVideoDevice(null, video, onResult);
 
-      // After 5s, if no result, bump resolution and restart once
       setTimeout(async ()=>{
         if(!got){
           try{
-            if(iosControls && iosControls.stop) iosControls.stop();
+            iosControls && iosControls.stop && iosControls.stop();
             if(iosStream){ iosStream.getTracks().forEach(t=>t.stop()); }
             iosStream = await startStream(2560);
-            iosControls = await reader.decodeFromVideoDevice(null, videoEl, onResult);
+            iosControls = await iosReader.decodeFromVideoDevice(null, video, onResult);
           }catch(_){}
         }
       }, 5000);
 
-      // Close/stop handlers
       const closeBtn = document.getElementById('iosCloseBtn');
-      const stopBtn  = document.getElementById('iosStopBtn');
+      const stopBtn = document.getElementById('iosStopBtn');
       closeBtn && (closeBtn.onclick = stopIosScanner);
       stopBtn  && (stopBtn.onclick  = stopIosScanner);
-
     }catch(e){
-      alert('iOS kamera başlatılamadı: ' + (e && e.message ? e.message : e));
+      alert('iOS kamera açılamadı: ' + (e && e.message ? e.message : e));
     }
   }
 
@@ -814,12 +818,10 @@ async function makeLabelsDoc(){
     if(layer) layer.style.display='none';
   }
 
-  // Bind iOS camera button (best performance path)
+  // Bind iOS button
   (function(){
     const btn = document.getElementById('btnCamIOS');
-    if(btn){
-      btn.onclick = function(ev){ ev.preventDefault(); startIosScanner(); };
-    }
+    if(btn){ btn.onclick = function(ev){ ev.preventDefault(); startIosScanner(); }; }
   })();
 })();
 </script>
