@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fiyat Gör Etiket Bas — TAM SÜRÜM</title>
+<title>Fiyat Gör Etiket Bas — TAM SÜRÜM (28/sayfa fix)</title>
 
 <!-- Icons & Libs -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
@@ -82,7 +82,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .pdfBox{width:min(95vw,920px);height:90vh;display:flex;flex-direction:column}
 .pdfFrame{flex:1;border:1px solid var(--line);border-radius:8px}
 
-/* Label template */
+/* Label template (UI gösterim için — PDF çizimini jsPDF ile yapıyoruz) */
 #etiketler{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 .etiket{background:#fff;width:260px;height:100px;border-radius:14px;box-shadow:0 1px 6px #d7d7db55;display:flex;flex-direction:row;align-items:flex-start;padding:12px 12px 8px 6px;box-sizing:border-box;position:relative}
 .etiket-logo{width:60px;height:78px;margin-right:5px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:flex-start}
@@ -346,8 +346,9 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   /* ===== FX SWITCH ===== */
   $('toggleFx').checked=!!FX; $('toggleFx').addEventListener('change', ()=>{ FX=$('toggleFx').checked; localStorage.setItem('etiket_fx',JSON.stringify(FX)); });
 
-  /* ===== LABEL RENDERER ===== */
+  /* ===== LABEL RENDERER (jsPDF doğrudan çizim — 4x7 = 28/sayfa) ===== */
   function buildLabelNode(it){
+    // UI önizleme için HTML etiket şablonu (PDF çiziminden bağımsız)
     const canvas=document.createElement('canvas');
     const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
     JsBarcode(canvas,it.barcode,{format:fmt,height:44,width:2,displayValue:true,font:'Arial',fontSize:12,textMargin:2,margin:0,lineColor:'#000'});
@@ -394,7 +395,6 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     TOTAL_PRINTED += totalNow;
     localStorage.setItem('etiket_total_printed', TOTAL_PRINTED);
 
-    const { jsPDF }=window.jspdf; // save
     __docLabels.save(`etiketler_${new Date().toISOString().slice(0,10)}.pdf`);
     $('mdlPdf').classList.remove('shown');
 
@@ -432,32 +432,88 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   });
 
   async function makeLabelsDoc(){
-    const { jsPDF }=window.jspdf; const A4W=210,A4H=297,cols=4,rows=10,margin=5;
-    const work=$('work'); work.innerHTML='';
-    const labels=[]; CART.forEach(it=>{ for(let i=0;i<it.qty;i++) labels.push(it); });
-    const per=cols*rows; const pages=Math.max(1,Math.ceil(labels.length/per)); const doc=new jsPDF({unit:'mm',format:'a4'});
+    const { jsPDF }=window.jspdf;
+    // A4 sayfa ve 4x7 grid (sayfa başına 28 etiket) — FIX
+    const A4W=210, A4H=297, margin=5;
+    const cols=4, rows=7; // 28/sayfa
+    const gridW=A4W - margin*2, gridH=A4H - margin*2;
+    const colW=gridW/cols, rowH=gridH/rows;
 
-    let li=0;
-    for(let pg=0;pg<pages;pg++){
-      const page=document.createElement('div');
-      page.style.cssText='width:794px;height:1123px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:12px;background:#fff';
-      for(let r=0;r<rows;r++){
-        for(let c=0;c<cols;c++){
-          const holder=document.createElement('div');
-          holder.style.cssText='display:flex;align-items:center;justify-content:center;border:1px dashed #e5e7eb;border-radius:8px';
-          const it=labels[li++]; if(it){ holder.appendChild(buildLabelNode(it)); }
-          page.appendChild(holder);
-        }
+    // Etiketleri sıraya diz
+    const labels=[]; CART.forEach(it=>{ for(let i=0;i<it.qty;i++) labels.push(it); });
+    const per=cols*rows; const pages=Math.max(1, Math.ceil(labels.length/per));
+
+    const doc=new jsPDF({unit:'mm',format:'a4'});
+
+    // Yardımcılar
+    function barcodeDataURL(code){
+      const cvs=document.createElement('canvas');
+      const fmt=/^[0-9]{13}$/.test(code)?'EAN13':'CODE128';
+      JsBarcode(cvs, code, {format:fmt, height:18, width:0.8, displayValue:false, margin:0, lineColor:'#000'});
+      return cvs.toDataURL('image/png');
+    }
+    function wrapText(doc, text, x, y, maxWidth, lineHeight){
+      const words = String(text||'').split(/\s+/g); let line=''; let yy=y;
+      for(let n=0;n<words.length;n++){
+        const test = line ? line + ' ' + words[n] : words[n];
+        const w = doc.getTextWidth(test);
+        if(w > maxWidth){ doc.text(line, x, yy); line = words[n]; yy += lineHeight; }
+        else { line = test; }
       }
-      work.appendChild(page);
-      const canvas=await html2canvas(page,{scale:3,useCORS:true,allowTaint:true,background:'#fff'});
-      const img=canvas.toDataURL('image/jpeg',0.82);
-      if(pg>0) doc.addPage(); doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
+      if(line) doc.text(line, x, yy);
+      return yy;
     }
 
-    const total=CART.reduce((a,x)=>a+x.qty,0), oldCount=CART.reduce((a,x)=>a+(x.isOld?x.qty:0),0);
-    const sinceTxt = ` ${new Date(+PRINT_BASE_TS).toLocaleString('tr-TR')}’den beri ${TOTAL_PRINTED+total} etiket basıldı.`;
-    doc.setFontSize(14); doc.text(`Toplam: ${total} • Eski fiyatlı: ${oldCount} •${sinceTxt}`, A4W/2, A4H-5, {align:'center'});
+    // Sayfaları çiz
+    let idx=0;
+    for(let p=0; p<pages; p++){
+      if(p>0) doc.addPage();
+      // Grid hücreleri
+      for(let r=0; r<rows; r++){
+        for(let c=0; c<cols; c++){
+          const it = labels[idx++];
+          const x = margin + c*colW;
+          const y = margin + r*rowH;
+
+          // Hücre çerçevesi (hafif)
+          doc.setDrawColor(229,231,235); doc.setLineWidth(0.2); doc.roundedRect(x+0.8, y+0.8, colW-1.6, rowH-1.6, 2,2);
+
+          if(!it) continue; // boş hücre
+
+          // Ürün adı (2 satıra sığacak şekilde)
+          doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(17,24,39);
+          const nameMaxW = colW - 40; // barkod/price alanına yer bırak
+          wrapText(doc, it.name, x+3, y+7, nameMaxW, 4);
+
+          // Fiyat (büyük, TL kırmızı)
+          doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(226,0,50);
+          const priceStr = fmtTRY.format(it.price);
+          doc.text(priceStr, x+colW-2, y+rowH-6, {align:'right'});
+
+          // Barkod görseli
+          const png = barcodeDataURL(it.barcode);
+          const bw = colW-12; const bh = 14; // barkod ölçüleri
+          doc.addImage(png, 'PNG', x+3, y+rowH-bh-6, bw, bh);
+
+          // Barkod altına yazı
+          doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(71,85,105);
+          doc.text(String(it.barcode), x+3, y+rowH-2);
+        }
+      }
+
+      // Sayfa altı rapor (yalnız son sayfada büyük)
+      if(p===pages-1){
+        const total = CART.reduce((a,x)=>a+x.qty,0);
+        const oldCount = CART.reduce((a,x)=>a+(x.isOld?x.qty:0),0);
+        const sinceTxt = `${new Date(+PRINT_BASE_TS).toLocaleString('tr-TR')}’den beri ${TOTAL_PRINTED+total} etiket basıldı.`;
+        doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(17,24,39);
+        doc.text(`Toplam: ${total} • Eski fiyatlı: ${oldCount} • ${sinceTxt}`, A4W/2, A4H-3, {align:'center'});
+      } else {
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,116,139);
+        doc.text(`Devamı sonraki sayfada…`, A4W-10, A4H-3, {align:'right'});
+      }
+    }
+
     return doc;
   }
 
@@ -465,28 +521,18 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     const old=CART.filter(x=>x.isOld);
     const { jsPDF }=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'});
 
-    const wrap=document.createElement('div'); wrap.style.cssText='width:794px;min-height:1123px;background:#fff;padding:18px';
-    const h=document.createElement('div'); h.textContent='Eski Fiyatlı Ürünler'; h.style.cssText='font-weight:900;font-size:22px;margin-bottom:8px'; wrap.appendChild(h);
-    const sub=document.createElement('div'); sub.textContent=`Tarih: ${new Date().toLocaleDateString('tr-TR')}  •  Toplam: ${old.reduce((a,x)=>a+x.qty,0)} etiket`; sub.style.cssText='color:#475569;margin-bottom:12px'; wrap.appendChild(sub);
+    doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.text('Eski Fiyatlı Ürünler', 10, 12);
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.text(`Tarih: ${new Date().toLocaleDateString('tr-TR')}  •  Toplam: ${old.reduce((a,x)=>a+x.qty,0)} etiket`, 10, 18);
 
-    const list=document.createElement('div'); list.style.cssText='display:flex;flex-direction:column;gap:8px';
-    if(old.length===0){ const no=document.createElement('div'); no.textContent='Eski fiyatlı ürün bulunmadı.'; list.appendChild(no); }
-    old.forEach(it=>{
+    let y=26; old.forEach(it=>{
       const cvs=document.createElement('canvas'); const fmt=/^\d{13}$/.test(it.barcode)?'EAN13':'CODE128';
-      JsBarcode(cvs,it.barcode,{format:fmt,height:36,displayValue:false,margin:0,lineColor:'#000',width:2});
+      JsBarcode(cvs,it.barcode,{format:fmt,height:16,displayValue:false,margin:0});
       const png=cvs.toDataURL('image/png');
-      const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;justify-content:space-between;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px';
-      const left=document.createElement('div'); left.innerHTML=`<div style="font-weight:800">${it.name}</div><div style="color:#475569;font-family:Arial">${it.barcode}</div>`;
-      const mid=document.createElement('div'); mid.innerHTML=`<div><b>FD</b>: ${fmtDMY(it.priceDate)}</div><div><b>Fiyat</b>: ${fmtTRY.format(it.price)}</div>`; mid.style.cssText='min-width:160px;text-align:center;color:#111';
-      const right=document.createElement('div'); right.innerHTML=`<img src="${png}" alt="barkod" style="height:36px">`;
-      row.appendChild(left); row.appendChild(mid); row.appendChild(right); list.appendChild(row);
+      doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text(it.name, 10, y); y+=4;
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.text(`${it.barcode}  •  FD: ${fmtDMY(it.priceDate)}  •  ${fmtTRY.format(it.price)}`, 10, y);
+      doc.addImage(png,'PNG', 150, y-8, 45, 12); y+=10;
+      if(y>285){ doc.addPage(); y=20; }
     });
-    wrap.appendChild(list);
-
-    $('work').innerHTML=''; $('work').appendChild(wrap);
-    const canvas=await html2canvas(wrap,{scale:3,useCORS:true,allowTaint:true,background:'#fff'});
-    const img=canvas.toDataURL('image/jpeg',0.9);
-    doc.addImage(img,'JPEG',5,5,200,287);
     return doc;
   }
 
@@ -510,7 +556,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 
   window.addEventListener('beforeunload', (e)=>{
     if(CART.length>0){ // otomatik indirme
-      try{ downloadJSON('sepet.json', CART); }catch(_){}
+      try{ downloadJSON('sepet.json', CART); }catch(_){};
     }
   });
 
@@ -533,7 +579,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     const md=document.createElement('div'); md.className='modal shown'; md.innerHTML=`<div class="box"><h3>Son 10 Günde Fiyatı Değişenler</h3><div class="mini">Toplam grup: ${map.size}</div></div>`; md.querySelector('.box').appendChild(L); const row=document.createElement('div'); row.className='actions'; row.style.justifyContent='flex-end'; row.innerHTML='<button class="btn" id="fd10Close">Kapat</button>'; md.querySelector('.box').appendChild(row); document.body.appendChild(md); md.querySelector('#fd10Close').onclick=()=>md.remove();
   });
 
-  /* ===== Kamera — Android (genel) ===== */
+  /* ===== Kamera — Android (genel) — sadece EAN-13/UPC-A ===== */
   ;(function(){
     let stream=null, scanning=false, starting=false, rafId=null, bdDetector=null, watchdogId=null, lastVideoTime=0, restartTries=0;
     const MAX_RETRIES=3; const SHEET_ID='camSheet';
@@ -558,7 +604,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
       let canBD='BarcodeDetector' in window; if(canBD){ try{ const supported=await BarcodeDetector.getSupportedFormats(); const wanted=['ean-13','upc-a']; const fmts=supported.filter(f=>wanted.includes(f)); bdDetector=new BarcodeDetector({formats: fmts.length?fmts:undefined}); }catch(_){ canBD=false; } }
       scanning=true; starting=false; setBtnBusy(false); startWatchdog();
       if(canBD){ const tick=async()=>{ if(!scanning) return; try{ const v=getVideo(); const codes=await bdDetector.detect(v); if(codes && codes.length){ let raw=(codes[0].rawValue??codes[0].value??'').toString(); let m=raw.match(/\d{8,}/g); const code=m?m.sort((a,b)=>b.length-a.length)[0]:raw; onDetected(code); return; } }catch(_e){} rafId=requestAnimationFrame(tick); }; rafId=requestAnimationFrame(tick); }
-      else{ // Quagga fallback — yalnız EAN & UPC
+      else{ // Quagga fallback — yalnız EAN & UPC (flash yok)
         try{ const s=document.createElement('script'); s.src='https://unpkg.com/@ericblade/quagga2/dist/quagga.js'; await new Promise((res,rej)=>{ s.onload=res; s.onerror=rej; }); document.head.appendChild(s); Quagga.init({ inputStream:{ type:'LiveStream', target: camMount, constraints:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} } }, decoder:{ readers:['ean_reader','ean_8_reader','upc_reader','upc_e_reader'] }, locate:true }, err=>{ if(err){ alert('Quagga init hatası: '+err); return; } Quagga.start(); Quagga.onDetected(res=>{ const code=res?.codeResult?.code||''; if(code) onDetected(code); }); }); }catch(e){ alert('Tarayıcı desteği yetersiz: '+e); closeCam(); }
       }
     }
@@ -568,8 +614,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 
     async function safeRestart(){ try{ restartTries++; stopCamera(); const v=replaceVideo(); const s=await tryGetStream(restartTries); v.srcObject=s; stream=s; await v.play().catch(()=>{}); await waitForPlaying(v,1500); startWatchdog(); }catch(_){ if(restartTries>=MAX_RETRIES){ stopCamera(); camSheet.style.display='none'; setBtnBusy(false); } } }
 
-    function onDetected(code){ if(!code) return; const c=String(code).replace(/\D/g,''); if(c.length===13 && !isValidEAN13(c)) return; stopCamera(); camSheet.style.display='none'; const p=findProduct(c); if(p){ openProduct(p); } else { const inp=$('inpBarcode'); if(inp){ inp.value=c.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); } } try{ if(navigator.vibrate) navigator.vibrate(35); }catch(_){}
-    }
+    function onDetected(code){ if(!code) return; const c=String(code).replace(/\D/g,''); if(c.length===13 && !isValidEAN13(c)) return; stopCamera(); camSheet.style.display='none'; const p=findProduct(c); if(p){ openProduct(p); } else { const inp=$('inpBarcode'); if(inp){ inp.value=c.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); } } try{ if(navigator.vibrate) navigator.vibrate(35); }catch(_){} }
     function isValidEAN13(code){ if(!/^\d{13}$/.test(code)) return false; let sum=0; for(let i=0;i<12;i++) sum += parseInt(code[i],10)*(i%2===0?1:3); return ((10-(sum%10))%10)===parseInt(code[12],10); }
     function findProduct(code){ const arr=PRODUCTS||[]; const norm=s=>String(s??'').replace(/\D/g,''); const c=norm(code); let exact=arr.find(p=>norm(p.barcode)===c); if(exact) return exact; if(c.length===13){ const c12=c.slice(1); const upc=arr.find(p=>norm(p.barcode).length===12 && norm(p.barcode)===c12); if(upc) return upc; } if(c.length===12){ const ean=arr.find(p=>norm(p.barcode).length===13 && norm(p.barcode).slice(1)===c); if(ean) return ean; } const suf=arr.find(p=>{const pb=norm(p.barcode); return pb.length>=8 && c.length>=8 && (pb.endsWith(c)||c.endsWith(pb));}); return suf||null; }
 
