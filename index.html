@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fiyat Gör Etiket Bas — TAM SÜRÜM ( 24/sayfa • yüksek çözünürlük</title>
+<title>Fiyat Gör Etiket Bas — 24/sayfa • yüksek çözünürlük • FINAL</title>
 
 <!-- Icons & Libs -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
@@ -94,6 +94,24 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .etiket-fiyat .tlsimge{font-size:15px;margin-left:1px}
 .etiket-barkod{width:72px;height:54px;display:flex;flex-direction:column;align-items:flex-end}
 .etiket-barkod img{width:100%;height:44px;object-fit:contain}
+
+
+/* Akıllı tipografi iyileştirmeleri */
+.etiket-fiyat{font-variant-numeric: tabular-nums; display:flex; align-items:flex-end; justify-content:flex-end}
+/* Fiyat bloğu başlık + değer sütunu */
+.etiket-fiyat-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.etiket-fiyat-etiket{font-size:12px;color:#111;font-weight:600;letter-spacing:.2px}
+/* Eski Fiyat Rozeti (etiketin sol-üst köşesi) */
+.etiket-badge{
+  position:absolute; left:6px; top:6px;
+  padding:2px 6px; border-radius:6px;
+  font-size:11px; font-weight:800; line-height:1;
+  color:#7f1d1d; background:#fee2e2; border:1px solid #fecaca;
+  box-shadow:0 1px 2px rgba(0,0,0,.08);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.etiket-badge i{ font-style:normal; margin-right:4px }
+
 
 /* FD 10 gün liste */
 .groupCard{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px}
@@ -427,11 +445,49 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     const priceStr=fmtTRY.format(it.price).replace('₺','');
     const wrap=document.createElement('div');
     wrap.className='etiket';
-    wrap.innerHTML=`<div class="etiket-logo"><img src="logo.png" alt="Logo" crossorigin="anonymous"></div>
+    const isOld = !!it.isOld;
+const badge = isOld ? `<div class="etiket-badge"><i>⚠️</i>Eski</div>` : '';
+wrap.innerHTML=`${badge}<div class="etiket-logo"><img src="logo.png" alt="Logo" crossorigin="anonymous"></div>
     <div class="etiket-icerik">
       <div class="etiket-stokadi">${it.name}</div>
-      <div class="etiket-row"><div class="etiket-fiyat">${priceStr} <span class="tlsimge">₺</span></div>
-      <div class="etiket-barkod"><img src="${barPng}" alt="Barkod"></div></div></div>`;
+      <div class="etiket-row">
+        <div class="etiket-fiyat-wrap">
+          <div class="etiket-fiyat-etiket">Satış Fiyatı</div>
+          <div class="etiket-fiyat">${priceStr} <span class="tlsimge">₺</span></div>
+        </div>
+        <div class="etiket-barkod"><img src="${barPng}" alt="Barkod"></div>
+      </div>
+    </div>`;
+try{
+  const nameEl = wrap.querySelector('.etiket-stokadi');
+  if(nameEl){
+    const L = (it.name||'').length;
+    let fs = 13;
+    if(L <= 10) fs = 14; else if(L >= 28) fs = 11; else if(L >= 20) fs = 12;
+    nameEl.style.fontSize = fs + 'px';
+  }
+}catch(_){ }
+try{
+  const priceEl = wrap.querySelector('.etiket-fiyat');
+  if(priceEl){
+    const raw = (it.price!=null?Number(it.price):0);
+    const abs = Math.floor(Math.abs(raw));
+    const digits = String(abs).length; // integer basamak sayısı
+    let fs = 26; // default (orta)
+    if(digits <= 1) fs = 28;           // 7,50 → büyük
+    else if(digits == 2) fs = 26;      // 17,50 → orta
+    else if(digits == 3) fs = 24;      // 177,50 → orta-alt
+    else fs = 26;                       // 1777,50 → tekrar orta
+    priceEl.style.fontSize = fs + 'px';
+    // Shrink-to-fit safety: never overflow container
+    const minFs = 22;
+    let guard = 0;
+    while(guard++ < 8 && priceEl.scrollWidth > priceEl.clientWidth && fs > minFs){
+      fs -= 1; priceEl.style.fontSize = fs + 'px';
+    }
+  }
+}catch(_){ }
+
     return wrap;
   }
 
