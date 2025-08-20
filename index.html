@@ -395,7 +395,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     try{
       const cvs=document.createElement('canvas');
       const fmt=/^\d{13}$/.test(p.barcode)?'EAN13':'CODE128';
-      JsBarcode(cvs,p.barcode,{format:fmt,height:36,width:2,displayValue:false,margin:0,lineColor:'#000'});
+      JsBarcode(cvs,p.barcode,{format:fmt,height:25,width:2,displayValue:false,margin:0,lineColor:'#000'});
       $('previewBarcode').src=cvs.toDataURL('image/png');
       $('previewName').textContent=p.name; $('previewPrice').textContent=fmtTRY.format(p.price);
       $('previewLabel').style.display='flex';
@@ -445,7 +445,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     // UI önizleme için HTML etiket şablonu (PDF çiziminden bağımsız)
     const canvas=document.createElement('canvas');
     const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
-    JsBarcode(canvas,it.barcode,{format:fmt,height:48,width:2.2,displayValue:true,font:'Arial',fontSize:14,textMargin:2,margin:0,lineColor:'#000'});
+    JsBarcode(canvas,it.barcode,{format:fmt,height:25,width:2.2,displayValue:true,font:'Arial',fontSize:14,textMargin:2,margin:0,lineColor:'#000'});
     const barPng=canvas.toDataURL('image/jpeg',0.82);
     const priceStr=fmtTRY.format(it.price).replace('₺','');
     const wrap=document.createElement('div');
@@ -616,7 +616,7 @@ async function makeLabelsDoc(){
 
     let y=26; old.forEach(it=>{
       const cvs=document.createElement('canvas'); const fmt=/^\d{13}$/.test(it.barcode)?'EAN13':'CODE128';
-      JsBarcode(cvs,it.barcode,{format:fmt,height:16,displayValue:false,margin:0});
+      JsBarcode(cvs,it.barcode,{format:fmt,height:25,displayValue:false,margin:0});
       const png=cvs.toDataURL('image/png');
       doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text(it.name, 10, y); y+=4;
       doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.text(`${it.barcode}  •  FD: ${fmtDMY(it.priceDate)}  •  ${fmtTRY.format(it.price)}`, 10, y);
