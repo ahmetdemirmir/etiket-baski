@@ -340,62 +340,54 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
 
   /* ===== Sheets & Excel Yükleme ===== */
   $('btnFetchSheets').addEventListener('click', ()=>{
-    const primary = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
-    const candidates = [
-      primary,
-      primary.replace('/gviz/tq?tqx=out:csv', '/export?format=csv'),
-      primary.replace('/gviz/tq?tqx=out:csv', '/export?format=xlsx'),
-    ];
+      const primary = 'https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
+      const candidates = [
+        primary,
+        primary.replace('/gviz/tq?tqx=out:csv', '/export?format=csv'),
+        primary.replace('/gviz/tq?tqx=out:csv', '/export?format=xlsx')
+      ].filter(Boolean);
 
-    async function fetchAsText(url) {
-      const r = await fetch(url, { cache: 'no-store' });
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return await r.text();
-    }
-    async function fetchAsArrayBuffer(url) {
-      const r = await fetch(url, { cache: 'no-store' });
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return await r.arrayBuffer();
-    }
-
-    (async () => {
-      let lastErr = null;
-      for (const url of candidates) {
-        try {
-          if (url.endsWith('=csv')) {
-            const csv = await fetchAsText(url);
-            const wb = XLSX.read(csv, { type: 'string' });
-            const sheet = wb.Sheets[wb.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true, cellDates: true });
-            if (typeof normalizeRow === 'function') {
-              window.PRODUCTS = rows.map(normalizeRow).filter(x => x.barcode && x.name);
-            } else {
-              window.PRODUCTS = rows;
-            }
-            document.getElementById('badgeData').innerHTML = `<i class="fa-solid fa-database"></i> ${window.PRODUCTS.length>0?window.PRODUCTS.length+' ürün yüklendi (Sheets)':'Hiç ürün okunamadı'}`;
-            (function(){ const t=document.getElementById('toast'); if(t && window.PRODUCTS.length>0){ t.textContent='Veri yüklendi'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1500); } })();
-            return;
-          } else if (url.endsWith('=xlsx')) {
-            const ab = await fetchAsArrayBuffer(url);
-            const wb = XLSX.read(new Uint8Array(ab), { type: 'array', cellDates: true });
-            const sheet = wb.Sheets[wb.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true, cellDates: true });
-            if (typeof normalizeRow === 'function') {
-              window.PRODUCTS = rows.map(normalizeRow).filter(x => x.barcode && x.name);
-            } else {
-              window.PRODUCTS = rows;
-            }
-            document.getElementById('badgeData').innerHTML = `<i class="fa-solid fa-database"></i> ${window.PRODUCTS.length>0?window.PRODUCTS.length+' ürün yüklendi (Sheets)':'Hiç ürün okunamadı'}`;
-            (function(){ const t=document.getElementById('toast'); if(t && window.PRODUCTS.length>0){ t.textContent='Veri yüklendi'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1500); } })();
-            return;
-          }
-        } catch (e) {
-          lastErr = e;
-        }
+      async function fetchAsText(url) {
+        const r = await fetch(url, { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return await r.text();
       }
-      alert('Google Sheets verisi alınamadı. (Erişim / CORS)\nDetay: ' + (lastErr && lastErr.message ? lastErr.message : lastErr));
-    })();
-});
+      async function fetchAsArrayBuffer(url) {
+        const r = await fetch(url, { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return await r.arrayBuffer();
+      }
+
+      (async () => {
+        let lastErr = null;
+        for (const url of candidates) {
+          try {
+            if (url.endsWith('=csv')) {
+              const csv = await fetchAsText(url);
+              const wb = XLSX.read(csv, { type: 'string' });
+              const sheet = wb.Sheets[wb.SheetNames[0]];
+              const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true, cellDates: true });
+              const arr = (typeof normalizeRow==='function') ? rows.map(normalizeRow).filter(x=>x.barcode&&x.name) : rows;
+              window.PRODUCTS = arr;
+              const b = document.getElementById('badgeData'); if(b) b.innerHTML = `<i class="fa-solid fa-database"></i> ${arr.length>0?arr.length+' ürün yüklendi (Sheets)':'Hiç ürün okunamadı'}`;
+              const t = document.getElementById('toast'); if(t && arr.length>0){ t.textContent='Veri yüklendi'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1500); }
+              return;
+            } else if (url.endsWith('=xlsx')) {
+              const ab = await fetchAsArrayBuffer(url);
+              const wb = XLSX.read(new Uint8Array(ab), { type: 'array', cellDates: true });
+              const sheet = wb.Sheets[wb.SheetNames[0]];
+              const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true, cellDates: true });
+              const arr = (typeof normalizeRow==='function') ? rows.map(normalizeRow).filter(x=>x.barcode&&x.name) : rows;
+              window.PRODUCTS = arr;
+              const b = document.getElementById('badgeData'); if(b) b.innerHTML = `<i class="fa-solid fa-database"></i> ${arr.length>0?arr.length+' ürün yüklendi (Sheets)':'Hiç ürün okunamadı'}`;
+              const t = document.getElementById('toast'); if(t && arr.length>0){ t.textContent='Veri yüklendi'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1500); }
+              return;
+            }
+          } catch(e) { lastErr = e; }
+        }
+        alert('Google Sheets verisi alınamadı. (Erişim / CORS)\nDetay: ' + (lastErr && lastErr.message ? lastErr.message : lastErr));
+      })();
+    });
       try{ const sheet=wb.Sheets[wb.SheetNames[0]]; let rows=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true}); let arr=rows.map(normalizeRow).filter(x=>x.barcode&&x.name); PRODUCTS=arr; badgeData.innerHTML=\`<i class="fa-solid fa-database"></i> \${PRODUCTS.length>0?PRODUCTS.length+' ürün yüklendi (Sheets)':'Hiç ürün okunamadı'}\`; if(PRODUCTS.length>0) showToast('Veri yüklendi'); else alert('Uygun satır bulunamadı.'); }catch(err){ alert('Google Sheets verisi okunamadı: '+err); }
     }).catch(err=>alert('Google Sheets’den veri alınamadı: '+err));
   });
@@ -579,6 +571,8 @@ async function makeLabelsDoc(){
   for(let p=0; p<pages; p++){
     if(p>0) doc.addPage();
     const slice = labels.slice(p*per, p*per + per);
+      // Grid hizası için 27'ye tamamla (placeholder)
+      while (slice.length < 27) slice.push({__empty:true});
     // eksikleri placeholder ile doldur: grid hizası sabit kalsın
     while(slice.length < per) slice.push({__empty:true});
 
@@ -740,5 +734,47 @@ async function makeLabelsDoc(){
   })();
 
 })();</script>
+
+<script>
+(function(){
+  var el = document.getElementById('fileExcel');
+  if(el){
+    el.addEventListener('change', function(e){
+
+  const file = (e && e.target && e.target.files && e.target.files[0]) || null;
+  if(!file){ return; }
+  const ext = (file.name.split('.').pop()||'').toLowerCase();
+  const reader = new FileReader();
+  const applyWB = (wb) => {
+    try {
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:true, cellDates:true });
+      const arr = (typeof normalizeRow==='function') ? rows.map(normalizeRow).filter(x=>x.barcode&&x.name) : rows;
+      window.PRODUCTS = arr;
+      const b = document.getElementById('badgeData'); if(b) b.innerHTML = `<i class="fa-solid fa-database"></i> ${arr.length>0?arr.length+' ürün yüklendi (Excel/CSV)':'Hiç ürün okunamadı'}`;
+      const t = document.getElementById('toast'); if(t && arr.length>0){ t.textContent='Veri yüklendi'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1500); }
+    } catch(err) {
+      alert('Excel/CSV okunamadı: ' + (err && err.message ? err.message : err));
+    }
+  };
+  if(ext==='csv'){
+    reader.onload = (ev) => {
+      try { const wb = XLSX.read(ev.target.result, { type:'string' }); applyWB(wb); }
+      catch(err){ alert('CSV okunamadı: ' + (err && err.message ? err.message : err)); }
+    };
+    reader.readAsText(file);
+  } else {
+    reader.onload = (ev) => {
+      try { const wb = XLSX.read(new Uint8Array(ev.target.result), { type:'array', cellDates:true }); applyWB(wb); }
+      catch(err){ alert('XLSX okunamadı: ' + (err && err.message ? err.message : err)); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+    });
+  }
+})();
+</script>
+
 </body>
 </html>
