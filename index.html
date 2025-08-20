@@ -236,6 +236,12 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 (function(){
   
 
+
+  // ---- Progress helpers ----
+  const sleepFrame = ()=> new Promise(res=> requestAnimationFrame(res));
+  const showProgress = (msg)=>{ try{ document.getElementById('progText').textContent='0%'; document.getElementById('progBar').style.width='0%'; document.getElementById('mdlProgress').classList.add('shown'); }catch(_){} };
+  const updateProgress = (n, d)=>{ try{ const pct = d? Math.round((n/d)*100):0; document.getElementById('progText').textContent = pct + '%'; document.getElementById('progBar').style.width = pct + '%'; }catch(_){} };
+  const hideProgress = ()=>{ try{ document.getElementById('mdlProgress').classList.remove('shown'); }catch(_){} };
 // === LAYOUT CONFIG (27/sayfa) ===
 const LABELS_PER_PAGE = { cols: 3, rows: 9, gapPx: 4, pagePaddingPx: 10 }; // 3x9=27
 
@@ -440,7 +446,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
 
   function hasOldInCart(){ return CART.some(x=>x.isOld); }
 
-  $('btnPrint').addEventListener('click', async ()=>{
+  $('btnPrint').addEventListener('click', async ()=>{ try { showProgress();
     if(CART.length===0){ alert('Sepet boş.'); return; }
     if(hasOldInCart()){
       $('mdlOldWarn').classList.add('shown');
@@ -449,7 +455,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
     }
   });
   $('btnOldCancel').addEventListener('click', ()=> $('mdlOldWarn').classList.remove('shown'));
-  $('btnOldContinue').addEventListener('click', async ()=>{ $('mdlOldWarn').classList.remove('shown'); await makeAndShowLabelsPreview(); });
+  $('btnOldContinue').addEventListener('click', async ()=>{ $('mdlOldWarn').classList.remove('shown'); await makeAndShowLabelsPreview(); } catch(e){ hideProgress(); alert('Yazdır hazırlanırken hata oluştu: '+(e?.message||e)); console.error(e); } });
 
   async function makeAndShowLabelsPreview(){
     __docLabels = await makeLabelsDoc();
@@ -505,12 +511,13 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
   
 
 
+
 async function makeLabelsDoc(){
   const { jsPDF }=window.jspdf;
   // === A4 ve 27/sayfa (3x9) ===
   const A4W=210, A4H=297;
   const margin=5;               // sayfa dış marjin (mm)
-  const gapMM=1.5;              // hücreler arası boşluk (mm) — küçültüldü
+  const gapMM=1.5;              // hücreler arası boşluk (mm)
   const cols=3, rows=9;         // 27/sayfa
   const gridW=A4W - margin*2, gridH=A4H - margin*2;
   const colW=(gridW - gapMM*(cols-1))/cols;
@@ -521,7 +528,11 @@ async function makeLabelsDoc(){
   const per=cols*rows; const pages=Math.max(1, Math.ceil(labels.length/per));
   const doc=new jsPDF({unit:'mm',format:'a4'});
 
-  // Yardımcı: DOM'dan node üret (orijinal görünüm öncelikli)
+  // Çalışma alanı
+  const work = document.getElementById('work') || (()=>{const d=document.createElement('div'); d.id='work'; d.style.cssText='position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none;'; document.body.appendChild(d); return d;})();
+  work.innerHTML='';
+
+  // Yardımcı: orijinal görünümlü node
   function createLabelNode(it){
     let node=null;
     try{ if(typeof window.renderOriginalLabel==='function'){ node=window.renderOriginalLabel(it); } }catch(e){ node=null; }
@@ -530,44 +541,46 @@ async function makeLabelsDoc(){
     return node;
   }
 
-  // Yardımcı: Node'u canvas'a çevir → dataURL döndür
   async function nodeToDataURL(node){
-    // Ölçüm ve min ölçek: daha net için scale=2
-    return (await html2canvas(node,{background:'#fff',scale:2,useCORS:true,allowTaint:true})).toDataURL('image/jpeg',0.92);
+    // DİKKAT: html2canvas için node DOM'a bağlı olmalı ki CSS uygulanabilsin
+    work.appendChild(node);
+    await sleepFrame(); // tarayıcı stil hesaplasın
+    const canvas = await html2canvas(node,{background:'#fff',scale:2,useCORS:true,allowTaint:true});
+    const url = canvas.toDataURL('image/jpeg',0.92);
+    work.removeChild(node);
+    return url;
   }
 
-  // Her sayfayı yerleştir
+  showProgress();
+  const totalLabels = labels.length;
+  let rendered = 0;
+
   for(let p=0;p<pages;p++){
     if(p>0) doc.addPage();
     const slice = labels.slice(p*per, p*per+per);
-    // 27 hücrenin tamamını dolaş; boş olanlara placeholder çizme (boş bırak)
+
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){
         const i=r*cols+c; const it=slice[i];
         const x = margin + c*(colW+gapMM);
         const y = margin + r*(rowH+gapMM);
-        // Hücre sınırı (çok hafif grid için)
+        // Hücre çerçevesi (hafif)
         doc.setDrawColor(240); doc.setLineWidth(0.15); doc.roundedRect(x+0.4, y+0.4, colW-0.8, rowH-0.8, 1.5, 1.5);
 
         if(!it) continue;
-        // 1) Etiket node'unu üret
-        const node=createLabelNode(it);
-        // 2) Node'u görüntüye çevir
-        const dataURL = await nodeToDataURL(node);
-        // 3) Resmi hücreye oranla yerleştir (iç boşluk payı)
-        const pad=1.0; // mm
-        const maxW=colW - pad*2;
-        const maxH=rowH - pad*2;
-        // Görsel oranını bilmiyoruz → jsPDF addImage'de width/height oranını korumak için,
-        // önce kabaca maxW,maxH verip sonra merkezleyeceğiz.
-        // addImage resim oranını bozmaz; width/height verdiğimizde fit eder.
-        let drawW=maxW, drawH=maxH;
-        // İçerik görseli büyükse sığar; küçükse merkezde kalır.
-        doc.addImage(dataURL, 'JPEG', x+pad, y+pad, drawW, drawH, undefined, 'FAST');
+        try{
+          const node=createLabelNode(it);
+          const dataURL = await nodeToDataURL(node);
+          const pad=1.0; const maxW=colW - pad*2; const maxH=rowH - pad*2;
+          doc.addImage(dataURL, 'JPEG', x+pad, y+pad, maxW, maxH, undefined, 'FAST');
+        }catch(err){
+          // Hata olsa bile akışı kesmeyelim; hücreyi boş bırak
+          console.error('Label render error', err);
+        }
+        rendered++; if(rendered%2===0){ updateProgress(rendered, Math.max(totalLabels,1)); await sleepFrame(); }
       }
     }
 
-    // Alt bilgi
     if(p===pages-1){
       const total = CART.reduce((a,x)=>a+x.qty,0);
       const oldCount = CART.reduce((a,x)=>a+(x.isOld?x.qty:0),0);
@@ -579,6 +592,8 @@ async function makeLabelsDoc(){
       doc.text('Devamı sonraki sayfada…', A4W-8, A4H-2.5, {align:'right'});
     }
   }
+
+  hideProgress();
   return doc;
 }
 
@@ -721,5 +736,15 @@ async function makeLabelsDoc(){
 
 })();
 </script>
+
+<!-- Progress Modal -->
+<div id="mdlProgress" class="modal"><div class="box" style="width:min(92vw,440px)">
+  <h3>PDF Hazırlanıyor</h3>
+  <div class="mini">Lütfen bekleyin… <span id="progText">0%</span></div>
+  <div style="margin-top:10px;width:100%;height:10px;background:#eef2ff;border-radius:999px;overflow:hidden">
+    <div id="progBar" style="height:100%;width:0%;background:linear-gradient(90deg,#2563eb,#38bdf8)"></div>
+  </div>
+</div></div>
 </body>
+
 </html>
