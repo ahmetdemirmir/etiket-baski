@@ -361,7 +361,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
 
   /* ===== Sheets & Excel Yükleme ===== */
   $('btnFetchSheets').addEventListener('click', ()=>{
-    const url='https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
+    const url='https://docs.google.com/spreadsheets/d/e/2PACX-1vSCE485ORNI2xxxHJkrfJy6IBBeso9hQHxfhZ6dkUShRQWngyeyR5VsZI7rKwBy0A/pub?output=csv';
     fetch(url).then(r=>r.text()).then(csv=>{
       const wb=XLSX.read(csv,{type:'string'});
       try{ const sheet=wb.Sheets[wb.SheetNames[0]]; let rows=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true}); let arr=rows.map(normalizeRow).filter(x=>x.barcode&&x.name); PRODUCTS=arr; badgeData.innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün yüklendi (Sheets)':'Hiç ürün okunamadı'}`; if(PRODUCTS.length>0) showToast('Veri yüklendi'); else alert('Uygun satır bulunamadı.'); }catch(err){ alert('Google Sheets verisi okunamadı: '+err); }
