@@ -1137,5 +1137,48 @@ function normalizeProductRow(r){
 })();
 </script>
 
+
+<script id="__force_wire__">
+(function(){
+  function wire(merged){
+    // Populate many conventional globals so mevcut kod hangisini bekliyorsa onu yakalasın
+    try{ window.PRODUCTS = merged }catch(_){}
+    try{ window.products = merged }catch(_){}
+    try{ window.data = merged }catch(_){}
+    try{ window.items = merged }catch(_){}
+    try{ window.dataset = merged }catch(_){}
+    try{ window.rows = merged }catch(_){}
+
+    // UI counters (varsa)
+    try{ const el = document.getElementById('badgeData') || badgeData; if(el) el.innerHTML = `<i class="fa-solid fa-database"></i> ${merged.length} ürün + stok`; }catch(_){}
+
+    // Try a series of common render hooks without breaking if absent
+    const fns = ['render','refreshGrid','rebuild','reload','fillList','initList','draw','updateUI'];
+    fns.forEach(fn => { try{ if(typeof window[fn]==='function') window[fn](merged); }catch(_){}});
+
+    // As a last resort, drop a small visual proof: first 6 labels into #etiketler if exists
+    try{
+      const grid = document.getElementById('etiketler');
+      if(grid && typeof buildLabelNode === 'function'){
+        grid.innerHTML='';
+        merged.slice(0,6).forEach(p => grid.appendChild(buildLabelNode(p)));
+      }
+    }catch(_){}
+  }
+
+  // If our merge helper exists, wrap its applyMergedCb to call wire()
+  if(window.__mergeFetchAndApply && !window.__merge_wired__){
+    const prev = window.__mergeFetchAndApply;
+    window.__mergeFetchAndApply = function(applyMergedCb){
+      return prev(function(merged){
+        wire(merged);
+        return applyMergedCb ? applyMergedCb(merged) : (merged.length||0);
+      });
+    };
+    window.__merge_wired__ = true;
+  }
+})();
+</script>
+
 </body>
 </html>
