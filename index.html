@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fiyat Gör Etiket Bas — Ürün+Stok Merge (Akıllı Başlık Algılama)</title>
+<title>Fiyat Gör Etiket Bas — Ürün + Stok (CSV)</title>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -44,20 +44,16 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 .etiket-fiyat{font-size:26px;color:#e20032;font-weight:700;letter-spacing:1px;margin:0;display:flex;align-items:flex-end;gap:2px;min-width:52px;justify-content:center}
 .etiket-barkod{width:72px;height:54px;display:flex;flex-direction:column;align-items:flex-end}
 .kv{display:flex;align-items:center;gap:6px}
-table{border-collapse:collapse;border:1px solid #243244;width:100%} th,td{border:1px solid #243244;padding:6px 8px;font-size:12px}
-th{background:#111827}
 </style>
 </head>
 <body>
-<header><h1>Fiyat Gör Etiket Bas — Ürün + Stok Merge (Akıllı)</h1></header>
+<header><h1>Fiyat Gör Etiket Bas — Ürün + Stok (CSV)</h1></header>
 
 <div class="wrap">
   <div class="card">
     <div class="control" style="justify-content:space-between">
       <span id="badgeData" class="badge"><i class="fa-solid fa-database"></i> Veri yüklenmedi</span>
       <div class="kv">
-        <button id="btnDiag" class="btn neutral"><i class="fa-solid fa-stethoscope"></i> Teşhis</button>
-        <button id="btnConfig" class="btn neutral"><i class="fa-solid fa-gear"></i> Ürün URL</button>
         <button id="btnCart" class="btn neutral"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
         <button id="btnPrint" class="btn success"><i class="fa-solid fa-print"></i> Yazdır</button>
         <button id="btnFetchSheets" class="btn primary"><i class="fa-solid fa-cloud-download"></i> Google Sheets'ten Çek</button>
@@ -69,21 +65,11 @@ th{background:#111827}
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off" />
       <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv" />
     </div>
-    <small class="hint">İlk kullanımda ürünler URL’i sorulur ve kaydedilir. İki sheet barkodla otomatik birleşir. Hata durumunda “Teşhis”e bakın.</small>
+    <small class="hint">Buton tek seferde iki CSV’yi çeker ve barkodla birleştirir. (Ürün + Stok)</small>
   </div>
 
   <div id="etiketler" style="margin-top:14px"></div>
 </div>
-
-<!-- Teşhis modal -->
-<div id="mdlDiag" class="modal"><div class="box">
-  <h3>Teşhis / Parse Özeti</h3>
-  <div class="mini" id="diagSummary">Henüz yükleme yapılmadı.</div>
-  <div id="diagTables" style="margin-top:10px"></div>
-  <div class="actions" style="justify-content:flex-end">
-    <button id="btnDiagClose" class="btn neutral">Kapat</button>
-  </div>
-</div></div>
 
 <!-- Arama sonuçları -->
 <div id="mdlSearch" class="modal"><div class="box">
@@ -126,8 +112,8 @@ th{background:#111827}
 
 <script>
 (function(){
-  const SHEETS_URL_STOCKS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQMkBejpCxER9Mq_QKxmPxkDToCkaWc4HyGAAjgOT0tvO1HjwOIbTPzRO_Lkiw8CQ/pub?output=xlsx";
-  const LS_KEY_PRODUCTS_URL = "products_sheet_url";
+  const SHEETS_URL_PRODUCTS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCE485ORNI2xxxHJkrfJy6IBBeso9hQHxfhZ6dkUShRQWngyeyR5VsZI7rKwBy0A/pub?output=csv";
+  const SHEETS_URL_STOCKS   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQMkBejpCxER9Mq_QKxmPxkDToCkaWc4HyGAAjgOT0tvO1HjwOIbTPzRO_Lkiw8CQ/pub?output=csv";
 
   let PRODUCTS = [];
   let CART = JSON.parse(localStorage.getItem('etiket_cart')||'[]');
@@ -135,49 +121,16 @@ th{background:#111827}
   const fmtTRY=new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'});
   const fmtDMY=(d)=>{ try{const dt=(d instanceof Date)?d:new Date(d); if(isNaN(dt))return '—'; const dd=String(dt.getDate()).padStart(2,'0'); const mm=String(dt.getMonth()+1).padStart(2,'0'); const yy=dt.getFullYear(); return `${dd}/${mm}/${yy}`;}catch(_){ return '—'; }};
 
-  let lastDiag = {products:{}, stocks:{}, mergedCount:0};
-
   function showToast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);}
-  function parseBarcode(v){ if(v===undefined||v===null)return''; if(typeof v==='number'){const s=String(v); return s.includes('e+')?String(Math.trunc(v)).replace(/\\D/g,''):s.replace(/\\D/g,'');} return String(v).replace(/\\D/g,''); }
+  function parseBarcode(v){ if(v===undefined||v===null)return''; if(typeof v==='number')return String(Math.trunc(v)).replace(/\\D/g,''); return String(v).replace(/\\D/g,''); }
   function parsePrice(v){ if(v===undefined||v===null||v==='') return 0; if(typeof v==='number') return v; let s=String(v).replace(/[₺\\s]/g,'').replace(/\\u00A0/g,''); if(s.includes(',')&&s.includes('.')){ s=s.replace(/\\./g,'').replace(',', '.'); } else if(s.includes(',')){ s=s.replace(',', '.'); } return parseFloat(s)||0; }
   function parseExcelDate(v){ if(!v&&v!==0)return null; if(v instanceof Date&&!isNaN(v))return v; if(typeof v==='number'){ const epoch=new Date(1899,11,30); return new Date(epoch.getTime()+v*86400000);} const str=String(v).trim(); const m=str.match(/(\\d{1,2})[.\\/\\-](\\d{1,2})[.\\/\\-](\\d{2,4})/); if(m){ const d=new Date(+m[3],+m[2]-1,+m[1]); if(!isNaN(d))return d;} const d=new Date(str); return isNaN(d)?null:d; }
   function normKey(s){return String(s||'').toLowerCase().replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');}
 
-  // === Başlık algılama: Uygun satır bulunamadı hatası için sağlamlaştırma ===
   const BK= ['barkod','barkodno','ean','ean13'];
   const NK= ['stokadi','urunadi','adi','ad','stok','aciklama','stokadi1'];
   const PK= ['magaza','magazasatis','magazasatisfiyati','magazafiyati','satisfiyati1','satisfiyat1','sf1','fiyat','perakendesatis'];
   const DK= ['satisfiyati1degtar','satisfiyati1degtarihi','fiyatdegisikliktarihi','fiyatdegtarihi','fdtarihi','degisiktarihi','degistarihi','fiyatguncellemetarihi','tarih'];
-
-  function findHeaderRow(rows){ // rows: header:1 çıktısı (array of arrays)
-    // Bul: içinde en az bir barcode anahtarına benzeyen hücre olan satır
-    for(let i=0;i<Math.min(rows.length,30);i++){
-      const r=rows[i].map(x=> normKey(x));
-      const hasB = r.some(c=> BK.some(k=> c.includes(k)));
-      if(hasB) return i;
-    }
-    // Yedek: en uzun hücre sayılı satır
-    let bestIdx=0, bestLen=0;
-    rows.forEach((r,i)=>{ if(r.length>bestLen){ bestLen=r.length; bestIdx=i; } });
-    return bestIdx;
-  }
-
-  function sheetToJsonSmart(sheet){
-    // 1) Normal dene
-    let rows = XLSX.utils.sheet_to_json(sheet, {defval:'', raw:true, cellDates:true});
-    if(rows && rows.length) return rows;
-
-    // 2) Başlık 1 modunda al, başlık satırını bul
-    const arr = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
-    if(!arr || !arr.length) return [];
-    const hdrIdx = findHeaderRow(arr);
-    const header = arr[hdrIdx];
-    const data = arr.slice(hdrIdx+1);
-    // header + data'yı yeni sheet gibi işleyelim
-    const aoa = [header, ...data];
-    const tmpWs = XLSX.utils.aoa_to_sheet(aoa);
-    return XLSX.utils.sheet_to_json(tmpWs, {defval:'', raw:true, cellDates:true});
-  }
 
   function mapRowByKeys(row){
     const nk={};Object.keys(row).forEach(k=>nk[normKey(k)]=k);
@@ -186,9 +139,9 @@ th{background:#111827}
     const name=pick(NK);
     const price=pick(PK);
     const date=pick(DK);
-    return {barcode,name,price,date, _columns:Object.keys(row)};
+    return {barcode,name,price,date};
   }
-  function normalizeRow(r){ const m=mapRowByKeys(r); return { barcode:parseBarcode(m.barcode), name:String(m.name||'').trim(), price:parsePrice(m.price), priceDate:parseExcelDate(m.date), _columns:m._columns }; }
+  function normalizeRow(r){ const m=mapRowByKeys(r); return { barcode:parseBarcode(m.barcode), name:String(m.name||'').trim(), price:parsePrice(m.price), priceDate:parseExcelDate(m.date) }; }
 
   function mapRowByKeysStocks(row){
     const nk={}; Object.keys(row).forEach(k=> nk[normKey(k)] = k );
@@ -218,93 +171,33 @@ th{background:#111827}
   function setCart(n){ CART=n; localStorage.setItem('etiket_cart',JSON.stringify(CART)); $('cartCount').textContent=CART.reduce((a,x)=>a+x.qty,0); }
   setCart(CART);
 
-  function promptProductsUrl(initial){
-    const v = prompt("Ürünler Google Sheets paylaşım URL’inizi girin (CSV veya XLSX):", initial||"");
-    if(v && v.trim()){
-      localStorage.setItem(LS_KEY_PRODUCTS_URL, v.trim());
-      return v.trim();
-    }
-    return null;
-  }
-
-  function buildLabelNode(it){
-    const canvas=document.createElement('canvas');
-    const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
-    JsBarcode(canvas,it.barcode,{format:fmt,height:48,width:2.2,displayValue:true,font:'Arial',fontSize:14,textMargin:2,margin:0,lineColor:'#000'});
-    const barPng=canvas.toDataURL('image/png');
-    const priceStr=fmtTRY.format(it.price).replace('₺','');
-    const wrap=document.createElement('div'); wrap.className='etiket';
-    wrap.innerHTML=`<div class="etiket-logo"><div style="font-weight:800;color:#2563eb">DEMIR</div></div>
-      <div class="etiket-icerik">
-        <div class="etiket-stokadi">${it.name}</div>
-        <div class="etiket-row">
-          <div class="etiket-fiyat">${priceStr}&nbsp;₺</div>
-          <div class="etiket-barkod"><img src="${barPng}" style="width:100%;height:44px;object-fit:contain"/></div>
-        </div>
-      </div>`;
-    return wrap;
-  }
-
-  async function fetchTextOrArrayBuffer(url){
-    const res = await fetch(url, {cache:'no-store'});
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const ct = (res.headers.get('content-type')||'').toLowerCase();
-    if(ct.includes('text') || url.includes('output=csv') || url.endsWith('.csv')){
-      return {kind:'text', data: await res.text()};
-    }else{
-      return {kind:'array', data: await res.arrayBuffer()};
-    }
-  }
-  async function parseSheetSmart(raw){
-    if(raw.kind==='text'){
-      const wb = XLSX.read(raw.data, {type:'string'});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      return sheetToJsonSmart(ws);
-    }else{
-      const wb = XLSX.read(new Uint8Array(raw.data), {type:'array', cellDates:true});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      return sheetToJsonSmart(ws);
-    }
-  }
+  async function fetchCSV(url){ const res=await fetch(url,{cache:'no-store'}); if(!res.ok) throw new Error(`HTTP ${res.status}`); return await res.text(); }
 
   async function loadSheetsPair(){
-    let productsUrl = localStorage.getItem(LS_KEY_PRODUCTS_URL);
-    if(!productsUrl){
-      productsUrl = promptProductsUrl("https://docs.google.com/spreadsheets/d/e/.../pub?output=csv");
-      if(!productsUrl) { alert("Ürünler URL’i gerekli."); return; }
-    }
-
-    const [pRaw, sRaw] = await Promise.all([
-      fetchTextOrArrayBuffer(productsUrl),
-      fetchTextOrArrayBuffer(SHEETS_URL_STOCKS)
+    const [csvProducts, csvStocks] = await Promise.all([
+      fetchCSV(SHEETS_URL_PRODUCTS),
+      fetchCSV(SHEETS_URL_STOCKS)
     ]);
 
-    const rowsP = await parseSheetSmart(pRaw);
-    const rowsS = await parseSheetSmart(sRaw);
+    const wbP = XLSX.read(csvProducts,{type:'string'});
+    const wbS = XLSX.read(csvStocks,  {type:'string'});
 
-    const mappedP = rowsP.map(normalizeRow);
-    const prod = mappedP.filter(x=>x.barcode && x.name);
-    const mappedS = rowsS.map(normalizeStockRow);
-    const stocks = mappedS.filter(x=>x.barcode);
+    const sheetP=wbP.Sheets[wbP.SheetNames[0]];
+    const sheetS=wbS.Sheets[wbS.SheetNames[0]];
 
-    // Teşhis
-    lastDiag.products = { total: rowsP.length, mapped: mappedP.length, withBarcodeName: prod.length, sample: mappedP.slice(0,5) };
-    lastDiag.stocks   = { total: rowsS.length, mapped: mappedS.length, withBarcode: stocks.length, sample: mappedS.slice(0,5) };
+    let rowsP=XLSX.utils.sheet_to_json(sheetP,{defval:'',raw:true,cellDates:true});
+    let rowsS=XLSX.utils.sheet_to_json(sheetS,{defval:'',raw:true,cellDates:true});
 
-    if(prod.length === 0){
-      const cols = rowsP[0] ? Object.keys(rowsP[0]) : [];
-      alert("Ürünler sayfasında 'barkod' ve 'stok adı/fiyat' başlıkları tespit edilemedi.\nLütfen Teşhis'e tıklayıp görünen başlıkları kontrol edin.");
-      return;
-    }
-    if(stocks.length === 0){
-      alert("Stok sayfasında 'barkod' ve şube stok başlıkları tespit edilemedi.\nLütfen Teşhis'e tıklayıp görünen başlıkları kontrol edin.");
-      return;
-    }
+    const prod=rowsP.map(normalizeRow).filter(x=>x.barcode&&x.name);
+    const stocks=rowsS.map(normalizeStockRow).filter(x=>x.barcode);
+
+    if(prod.length===0) throw new Error('Ürün CSV’sinde geçerli satır bulunamadı (barkod/ad/fiyat başlıklarını kontrol edin).');
+    if(stocks.length===0) throw new Error('Stok CSV’sinde geçerli satır bulunamadı (barkod ve şube sütunlarını kontrol edin).');
 
     const stockMap=new Map();
     for(const s of stocks){
       const prev=stockMap.get(s.barcode)||{depo:0,merkez:0,ataevler:0,topkapi:0,fethiyesube:0};
-      stockMap.set(s.barcode,{
+      stockMap.set(s.barcode,{ 
         depo:prev.depo+(s.depo||0),
         merkez:prev.merkez+(s.merkez||0),
         ataevler:prev.ataevler+(s.ataevler||0),
@@ -318,48 +211,13 @@ th{background:#111827}
       stocks: stockMap.get(p.barcode)||{depo:0,merkez:0,ataevler:0,topkapi:0,fethiyesube:0}
     }));
 
-    lastDiag.mergedCount = PRODUCTS.length;
-
-    $('badgeData').innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün + stok (Sheets)': 'Hiç ürün okunamadı'}`;
+    $('badgeData').innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün + stok (Sheets)':'Hiç ürün okunamadı'}`;
     showToast('Ürün + stok verisi yüklendi');
 
     const grid=$('etiketler'); grid.innerHTML='';
     PRODUCTS.slice(0,6).forEach(p=> grid.appendChild(buildLabelNode(p)) );
   }
 
-  // Teşhis modalı
-  function openDiag(){
-    const s = lastDiag;
-    const sum = `Ürünler: ${s.products.withBarcodeName}/${s.products.total} satır uygun • Stoklar: ${s.stocks.withBarcode}/${s.stocks.total} satır uygun • Merge: ${s.mergedCount} ürün`;
-    $('diagSummary').textContent = sum;
-
-    const d = $('diagTables');
-    const tbl = (title, arr)=>{
-      const cols = arr && arr.length ? Object.keys(arr[0]) : [];
-      const head = cols.map(c=>`<th>${c}</th>`).join('');
-      const rows = (arr||[]).map(r=> `<tr>${cols.map(c=>`<td>${String(r[c])}</td>`).join('')}</tr>`).join('');
-      return `<h4>${title}</h4><div style="overflow:auto;max-height:42vh"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
-    };
-    d.innerHTML = tbl('Ürünler (örnek 5)', s.products.sample) + tbl('Stoklar (örnek 5)', s.stocks.sample);
-    $('mdlDiag').classList.add('shown');
-  }
-
-  // ==== eventler ====
-  $('btnFetchSheets').onclick = async ()=>{
-    try{ await loadSheetsPair(); }
-    catch(e){
-      alert('Sheets’ten veriler alınamadı: ' + e.message + '\\nÜrünler URL’ini güncelleyin.');
-    }
-  };
-  $('btnConfig').onclick = ()=>{
-    const cur = localStorage.getItem(LS_KEY_PRODUCTS_URL)||'';
-    const v = prompt("Ürünler Google Sheets paylaşım URL’inizi girin (CSV veya XLSX):", cur);
-    if(v && v.trim()){ localStorage.setItem(LS_KEY_PRODUCTS_URL, v.trim()); alert('Ürünler URL’i kaydedildi.'); }
-  };
-  $('btnDiag').onclick = openDiag;
-  $('btnDiagClose').onclick = ()=> $('mdlDiag').classList.remove('shown');
-
-  // Arama
   const inpBarcode=$('inpBarcode'), inpName=$('inpName');
   function showResults(title,arr){ $('mFilter').textContent=title; $('mCount').textContent=arr.length; const L=$('mList'); L.innerHTML=''; arr.slice(0,200).forEach(p=>{ const li=document.createElement('div'); li.className='item'; li.innerHTML=`<div><div class="nm">${p.name}</div><div class="bc">${p.barcode}</div></div><div style="font-weight:900">${fmtTRY.format(p.price)}</div>`; li.onclick=()=>{ $('mdlSearch').classList.remove('shown'); openProduct(p); }; L.appendChild(li); }); $('mdlSearch').classList.add('shown'); }
   function filterByName(q){ const s=q.trim().toLowerCase(); if(s.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=> (p.name||'').toLowerCase().includes(s)); if(res.length) showResults(`Ad: "${q}"`,res); else $('mdlSearch').classList.remove('shown'); }
@@ -432,27 +290,28 @@ th{background:#111827}
   }
   $('btnPrint').addEventListener('click', async ()=>{
     if(CART.length===0){ alert('Sepet boş.'); return; }
-    makeLabelsDoc().then(doc=>doc.save('etiketler.pdf'));
+    const doc=await makeLabelsDoc();
+    doc.save('etiketler.pdf');
   });
 
-  // Excel manuel yükleme (opsiyonel)
-  $('fileExcel').addEventListener('change', async (ev)=>{
-    const f=ev.target.files[0]; if(!f) return;
-    const ext=(f.name.split('.').pop()||'').toLowerCase();
-    const r=new FileReader();
-    r.onload=e=>{
-      const wb = ext==='csv' ? XLSX.read(e.target.result,{type:'string'}) : XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
-      const sheet=wb.Sheets[wb.SheetNames[0]];
-      let rows=sheetToJsonSmart(sheet);
-      PRODUCTS = rows.map(normalizeRow).filter(x=>x.barcode&&x.name);
-      $('badgeData').innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün (Excel)': 'Hiç ürün okunamadı'}`;
-      showToast('Excel verisi yüklendi');
-    };
-    if(ext==='csv') r.readAsText(f); else r.readAsArrayBuffer(f);
-  });
+  function buildLabelNode(it){
+    const canvas=document.createElement('canvas');
+    const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
+    JsBarcode(canvas,it.barcode,{format:fmt,height:48,width:2.2,displayValue:true,font:'Arial',fontSize:14,textMargin:2,margin:0,lineColor:'#000'});
+    const barPng=canvas.toDataURL('image/png');
+    const priceStr=fmtTRY.format(it.price).replace('₺','');
+    const wrap=document.createElement('div'); wrap.className='etiket';
+    wrap.innerHTML=`<div class="etiket-logo"><div style="font-weight:800;color:#2563eb">DEMIR</div></div>
+      <div class="etiket-icerik">
+        <div class="etiket-stokadi">${it.name}</div>
+        <div class="etiket-row">
+          <div class="etiket-fiyat">${priceStr}&nbsp;₺</div>
+          <div class="etiket-barkod"><img src="${barPng}" style="width:100%;height:44px;object-fit:contain"/></div>
+        </div>
+      </div>`;
+    return wrap;
+  }
 
-  // Teşhis kısa yol
-  window.__etiketDiag = ()=>lastDiag;
 })();</script>
 </body>
 </html>
