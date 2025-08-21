@@ -361,7 +361,7 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
 
   /* ===== Sheets & Excel Yükleme ===== */
   $('btnFetchSheets').addEventListener('click', ()=>{
-    const url='https://docs.google.com/spreadsheets/d/e/2PACX-1vSCE485ORNI2xxxHJkrfJy6IBBeso9hQHxfhZ6dkUShRQWngyeyR5VsZI7rKwBy0A/pub?output=csv';
+    const url='https://docs.google.com/spreadsheets/d/1mOXWfC616TIIzodvzziuvVDEeHylfbPearAPeoTxLbc/gviz/tq?tqx=out:csv';
     fetch(url).then(r=>r.text()).then(csv=>{
       const wb=XLSX.read(csv,{type:'string'});
       try{ const sheet=wb.Sheets[wb.SheetNames[0]]; let rows=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true}); let arr=rows.map(normalizeRow).filter(x=>x.barcode&&x.name); PRODUCTS=arr; badgeData.innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün yüklendi (Sheets)':'Hiç ürün okunamadı'}`; if(PRODUCTS.length>0) showToast('Veri yüklendi'); else alert('Uygun satır bulunamadı.'); }catch(err){ alert('Google Sheets verisi okunamadı: '+err); }
@@ -749,10 +749,15 @@ async function makeLabelsDoc(){
 
 <!-- AUTO-RESTART-CAMERA PATCH -->
 <script>
-// ===== AUTO-RESTART-CAMERA PATCH v3 (Popup-aware) =====
+// ===== AUTO-RESTART-CAMERA PATCH v2 (Safer) =====
+// Amaç: Yalnızca POPUP KAPANDIKTAN SONRA kamerayı yeniden başlat.
+// Not: Sayfa yüklenir yüklenmez asla kamera açma!
+// Ek: Popup AÇILIRKEN kamerayı nazikçe durdur (kaynak serbest).
+
 (function(){ 
   const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
+  // Güvenli durdurma (global varsa), yoksa <video> akışını kapat
   function safeStopCamera() {
     try {
       if (isiOS && typeof window.stopCamIOS === 'function') return window.stopCamIOS();
@@ -763,10 +768,11 @@ async function makeLabelsDoc(){
         tracks.forEach(t => t.stop && t.stop());
         v.srcObject = null;
       }
-    } catch (_) { /* silent */ }
+    } catch (_) { /* sessiz düş */ }
   }
 
-  function safeStartCamera(){
+  // Güvenli başlatma (yalnızca kapanıştan sonra)
+  function safeStartCamera(){ 
     try {
       const fns = isiOS 
         ? ['startCamIOS','startIOS','openCameraIOS']
@@ -779,6 +785,7 @@ async function makeLabelsDoc(){
     } catch(_){}
   }
 
+  // Modal saptama yardımcıları
   function isVisible(el) {
     if (!el) return false;
     const cs = getComputedStyle(el);
@@ -786,41 +793,41 @@ async function makeLabelsDoc(){
     return (cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0') || shownByClass;
   }
   function guessModals() {
-    const ids = ['productModal','modal','mdl','urunModal','pop','popup','dialog','nfOverlay'];
+    const ids = ['productModal','modal','mdl','urunModal','pop','popup','dialog'];
     const set = new Set();
     ids.forEach(id=>{ const e=document.getElementById(id); if(e) set.add(e); });
     document.querySelectorAll('.modal, .popup, .dialog').forEach(e=>set.add(e));
     return Array.from(set);
   }
 
-  let wasOpen = false;
-  let everOpenedThisCycle = false;
+  // Durum izleme
+  let wasOpen = false;            // bir önceki karede modal açık mıydı?
+  let everOpenedThisCycle = false;// bu cycle'da en az bir kez açıldı mı?
   let restartLock = false;
 
   function handleMutation(){ 
     const modals = guessModals();
     const anyOpen = modals.some(isVisible);
 
+    // Açılış: açık hâle geçtiyse -> kamerayı durdur, "açıldı" bayrağını set et
     if (anyOpen && !wasOpen) { 
       everOpenedThisCycle = true; 
       safeStopCamera(); 
     }
 
+    // Kapanış: açık'tan kapalıya geçiş olduysa VE bu döngüde gerçekten açılmışsa -> yeniden başlat
     if (!anyOpen && wasOpen && everOpenedThisCycle && !restartLock) { 
-      if (window.__nfPreventAutoRestart) {
-        window.__nfPreventAutoRestart = false;
-      } else {
-        restartLock = true;
-        setTimeout(() => { 
-          safeStartCamera(); 
-          restartLock = false; 
-        }, 250);
-      }
-      everOpenedThisCycle = false; 
+      restartLock = true;
+      setTimeout(() => { 
+        safeStartCamera(); 
+        restartLock = false; 
+        everOpenedThisCycle = false; // bir sonraki modal için sıfırla
+      }, 250);
     }
     wasOpen = anyOpen;
   }
 
+  // Gözlemciyi başlat (yalnızca değişime tepki ver; INITIAL STATE'de kamera açma!)
   const observer = new MutationObserver(handleMutation);
   const startObs = () => { 
     try { observer.observe(document.body, { attributes:true, childList:true, subtree:true }); } catch(_){} 
@@ -828,6 +835,7 @@ async function makeLabelsDoc(){
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startObs);
   else startObs();
 
+  // Popup buton kabloları (sadece kapanışı hızlandırmak için; tek başlarına kamera açmazlar)
   function wireButtons(){
     const ids = ['btnAddOne','btnAdd','btnAddCustom','btnIptal','btnCancel','btnClose'];
     ids.forEach(id=>{
@@ -839,108 +847,6 @@ async function makeLabelsDoc(){
     });
   }
   setInterval(wireButtons, 500);
-})();
-</script>
-
-
-<!-- NOT-FOUND POPUP INJECTED -->
-<style>
-  .nf-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,.55);
-    display:none; align-items:center; justify-content:center; z-index: 9999;
-    padding: 16px;
-  }
-  .nf-modal {
-    width: 100%; max-width: 560px; background: #ffffff; border-radius: 20px;
-    box-shadow: 0 12px 32px rgba(0,0,0,.25); overflow: hidden;
-  }
-  .nf-head {
-    padding: 20px 22px; background: #0ea5e9; color:#fff; font-weight:800; font-size:18px;
-    display:flex; align-items:center; gap:12px;
-  }
-  .nf-body {
-    padding: 20px 22px; color:#0f172a; font-size:16px; line-height:1.5;
-  }
-  .nf-code {
-    display:inline-block; margin-top:8px; font-weight:800; font-family: ui-monospace, Menlo, Consolas, monospace;
-    background:#f1f5f9; padding:8px 12px; border-radius:12px;
-  }
-  .nf-actions {
-    display:flex; gap:14px; padding: 18px; background:#f8fafc; border-top:1px solid #e2e8f0;
-  }
-  .nf-btn {
-    flex:1; font-size:22px; font-weight:800; padding:26px 20px; border:none; border-radius:16px;
-    cursor:pointer;
-  }
-  .nf-btn-primary { background:#10b981; color:#fff; }
-  .nf-btn-secondary { background:#e5e7eb; color:#111827; }
-</style>
-
-<div id="nfOverlay" class="nf-overlay" role="dialog" aria-modal="true" aria-labelledby="nfTitle">
-  <div class="nf-modal">
-    <div class="nf-head">
-      <span id="nfTitle">Ürün Bulunamadı</span>
-    </div>
-    <div class="nf-body">
-      <div><strong>Üzgünüz, ürün bilgilerine ulaşılamadı.</strong></div>
-      <div>Lütfen barkodu <strong>yeniden okutmayı</strong> deneyin. Sorun devam ederse yöneticinize bilgi verin.</div>
-      <div id="nfCode" class="nf-code" style="display:none;"></div>
-    </div>
-    <div class="nf-actions">
-      <button id="nfRetry" class="nf-btn nf-btn-primary">Tekrar Dene (Kamerayı Aç)</button>
-      <button id="nfClose" class="nf-btn nf-btn-secondary">Kapat</button>
-    </div>
-  </div>
-</div>
-
-<script>
-(function(){
-  const overlay = document.getElementById('nfOverlay');
-  const codeEl  = document.getElementById('nfCode');
-  const btnRetry= document.getElementById('nfRetry');
-  const btnClose= document.getElementById('nfClose');
-
-  function show(code){
-    window.__nfPreventAutoRestart = true;
-    if (code) { codeEl.textContent = 'Okunan Kod: ' + code; codeEl.style.display='inline-block'; }
-    else { codeEl.style.display='none'; }
-    overlay.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    try {
-      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-      if (isIOS && typeof window.stopCamIOS === 'function') window.stopCamIOS();
-      else if (typeof window.stopCam === 'function') window.stopCam();
-    } catch(e){}
-  }
-  function hide(){
-    overlay.style.display = 'none';
-    document.body.style.overflow = '';
-  }
-
-  btnRetry.addEventListener('click', function(){
-    hide();
-    window.__nfPreventAutoRestart = false;
-    try {
-      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-      const startFns = isIOS ? ['startCamIOS','startIOS','openCameraIOS']
-                             : ['startCam','startCamera','openCamera','initCamera'];
-      for (const fn of startFns) if (typeof window[fn] === 'function') return window[fn]();
-      const ids = isIOS ? ['btnCamIOS','btnIOSCam','openCamIOS','openCameraIOS','iosCamBtn']
-                        : ['btnCam','btnCamera','openCam','openCamera','androidCamBtn'];
-      for (const id of ids) { const el = document.getElementById(id); if (el) return el.click(); }
-    } catch(e){}
-  });
-
-  btnClose.addEventListener('click', function(){
-    hide();
-    window.__nfPreventAutoRestart = true;
-  });
-
-  window.notifyNotFound = function(code){ show(code); };
-  document.addEventListener('product-not-found', function(ev){
-    const code = ev && ev.detail ? ev.detail.code : undefined;
-    show(code);
-  });
 })();
 </script>
 
