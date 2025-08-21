@@ -376,12 +376,28 @@ const nk={};Object.keys(row).forEach(k=>nk[normKey(k)]=k);
 }
   function normalizeRow(r){
 const m=mapRowByKeys(r);
+  function firstNonEmptyLike(token){
+    token = String(token||'').toLowerCase();
+    for(const k of Object.keys(r)){
+      const nk = normKey(k);
+      if(nk.includes(token)){
+        const v = r[k];
+        if(v!==undefined && v!==null && String(v).trim()!=='') return v;
+      }
+    }
+    return undefined;
+  }
+  const rawName = (m.name && String(m.name).trim()) || firstNonEmptyLike('stokadi') || firstNonEmptyLike('urunadi') || firstNonEmptyLike('stokadiy') || '';
+  const rawBarcode = (m.barcode && String(m.barcode).trim()) || firstNonEmptyLike('barkod') || '';
+  const rawPrice = (m.price!==undefined && m.price!=='') ? m.price : (firstNonEmptyLike('magaza') ?? firstNonEmptyLike('satisfiyat1') ?? firstNonEmptyLike('fiyat'));
+  const rawDate = (m.date!==undefined && m.date!=='') ? m.date : (firstNonEmptyLike('satisfiyati1degtar') ?? firstNonEmptyLike('fiyatdegisikliktarihi') ?? firstNonEmptyLike('fdtarihi'));
+
   const qty=(v)=>{ const n=parsePrice(v); if(!n||isNaN(n)) return 0; return Math.max(0, Math.floor(n)); };
   return {
-    barcode:parseBarcode(m.barcode),
-    name:String(m.name||'').trim(),
-    price:parsePrice(m.price),
-    priceDate:parseExcelDate(m.date),
+    barcode:parseBarcode(rawBarcode),
+    name:String(rawName||'').trim(),
+    price:parsePrice(rawPrice),
+    priceDate:parseExcelDate(rawDate),
     storeAtaevler: qty(m.sAtaevler),
     storeMerkez:   qty(m.sMerkez),
     storeFethiye:  qty(m.sFethiye),
