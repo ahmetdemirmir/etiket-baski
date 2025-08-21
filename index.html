@@ -257,6 +257,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 
 <script>
 (function(){
+/*__PG_ANCHOR__*/
   
 
 // === LAYOUT CONFIG (27/sayfa) ===
@@ -361,73 +362,64 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
 
   /* ===== Sheets & Excel Yükleme ===== */
   
-  $('btnFetchSheets').addEventListener('click', ()=>{
-    // Ürün + Stok iki CSV'yi paralel çeker
-    const fetchCSV = (url)=>fetch(url,{cache:'no-store'}).then(r=>{
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      return r.text();
-    });
-    Promise.all([ fetchCSV(SHEETS_URL_PRODUCTS), fetchCSV(SHEETS_URL_STOCKS) ])
-      .then(([csvP, csvS])=>{
-        // Ürünler
-        const wbP = XLSX.read(csvP,{type:'string'});
-        const sheetP = wbP.Sheets[wbP.SheetNames[0]];
-        let rowsP = XLSX.utils.sheet_to_json(sheetP,{defval:'',raw:true,cellDates:true});
-        const prod = rowsP.map(normalizeRow).filter(x=>x.barcode&&x.name);
+$('btnFetchSheets').addEventListener('click', () => {
+  const parseCSV = (txt) => {
+    const wb = XLSX.read(txt, {type:'string'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(ws, {defval:'', raw:true, cellDates:true});
+  };
+  window.__mergeSheetsCSV(
+    (csvP) => parseCSV(csvP),
+    (csvS) => parseCSV(csvS),
+    (rowsP, rowsS) => {
+      const prod = rowsP.map(normalizeRow).filter(x=>x.barcode&&x.name);
+      const nk=(o)=>Object.fromEntries(Object.keys(o).map(k=>[String(k).toLowerCase().normalize('NFD').replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').replace(/[^a-z0-9]/g,''),k]));
+      const num=(v)=> (v===undefined||v===null||v==='') ? 0 : Number(String(v).replace(',','.'))||0;
+      const stocks = rowsS.map(r=>{
+        const K = nk(r);
+        const pick = (...keys)=>{ for(const s of keys){ if(K[s]) return r[K[s]]; for(const k in K){ if(k.includes(s)) return r[K[k]]; } } return undefined; };
+        return {
+          barcode: String(pick('barkod','barkodno','ean','ean13')||'').replace(/\D/g,''),
+          depo: num(pick('depo','anadepo','depostok','fethiyedepo','fethiyedepostok')),
+          merkez: num(pick('merkez','merkezsube','merkezstok')),
+          ataevler: num(pick('ataevler','ataevlersube','ataevlerstok')),
+          topkapi: num(pick('topkapi','topkapisube','topkapistok')),
+          fethiyesube: num(pick('fethiyesube','fethiye4sube','fethiyesube4','fethiyesubestok'))
+        };
+      }).filter(x=>x.barcode);
 
-        // Stoklar
-        const wbS = XLSX.read(csvS,{type:'string'});
-        const sheetS = wbS.Sheets[wbS.SheetNames[0]];
-        let rowsS = XLSX.utils.sheet_to_json(sheetS,{defval:'',raw:true,cellDates:true});
+      const stockMap = new Map();
+      for(const s of stocks){
+        const p = stockMap.get(s.barcode) || {depo:0,merkez:0,ataevler:0,topkapi:0,fethiyesube:0};
+        stockMap.set(s.barcode, {
+          depo:p.depo+(s.depo||0),
+          merkez:p.merkez+(s.merkez||0),
+          ataevler:p.ataevler+(s.ataevler||0),
+          topkapi:p.topkapi+(s.topkapi||0),
+          fethiyesube:p.fethiyesube+(s.fethiyesube||0)
+        });
+      }
 
-        // Stok kolon eşleşmesi (esnek)
-        const nk=(o)=>Object.fromEntries(Object.keys(o).map(k=>[String(k).toLowerCase().normalize('NFD').replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').replace(/[^a-z0-9]/g,''),k]));
-        const num=(v)=> (v===undefined||v===null||v==='') ? 0 : Number(String(v).replace(',','.'))||0;
+      PRODUCTS = prod.map(p => ({
+        ...p,
+        stocks: stockMap.get(p.barcode) || {depo:0,merkez:0,ataevler:0,topkapi:0,fethiyesube:0}
+      }));
 
-        const stocks = rowsS.map(r=>{
-          const K = nk(r);
-          const pick = (*keys)=>{
-            for(const s of keys){
-              if(K[s]) return r[K[s]];
-              for(const k in K){ if(k.includes(s)) return r[K[k]]; }
-            }
-            return undefined;
-          };
-          return {
-            barcode: String(pick('barkod','barkodno','ean','ean13')||'').replace(/\D/g,''),
-            depo: num(pick('depo','anadepo','depostok','fethiyedepo','fethiyedepostok')),
-            merkez: num(pick('merkez','merkezsube','merkezstok')),
-            ataevler: num(pick('ataevler','ataevlersube','ataevlerstok')),
-            topkapi: num(pick('topkapi','topkapisube','topkapistok')),
-            fethiyesube: num(pick('fethiyesube','fethiye4sube','fethiyesube4','fethiyesubestok'))
-          };
-        }).filter(x=>x.barcode);
+      try {
+        const el = document.getElementById('badgeData') || badgeData;
+        if(el) el.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün + stok (Sheets)':'Hiç ürün okunamadı'}`;
+      } catch(_){}
 
-        // Map'e topla
-        const stockMap = new Map();
-        for(const s of stocks){
-          const p = stockMap.get(s.barcode) || {depo:0,merkez:0,ataevler:0,topkapi:0,fethiyesube:0};
-          stockMap.set(s.barcode, {
-            depo:p.depo+(s.depo||0),
-            merkez:p.merkez+(s.merkez||0),
-            ataevler:p.ataevler+(s.ataevler||0),
-            topkapi:p.topkapi+(s.topkapi||0),
-            fethiyesube:p.fethiyesube+(s.fethiyesube||0)
-          });
-        }
+      try {
+        const grid = document.getElementById('etiketler');
+        if(grid){ grid.innerHTML=''; PRODUCTS.slice(0,6).forEach(p => grid.appendChild(buildLabelNode(p))); }
+      } catch(_){}
 
-        // Merge
-        PRODUCTS = prod.map(p=>({
-          ...p,
-          stocks: stockMap.get(p.barcode) || {depo:0,merkez:0,ataevler:0,topkapi:0,fethiyesube:0}
-        }));
-
-        badgeData.innerHTML = `<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün + stok (Sheets)':'Hiç ürün okunamadı'}`;
-        if(PRODUCTS.length>0) showToast('Ürün + stok verisi yüklendi'); else alert('Uygun satır bulunamadı.');
-      })
-      .catch(err=>alert('Google Sheets’den veri alınamadı: '+err));
-  });
-try{ const sheet=wb.Sheets[wb.SheetNames[0]]; let rows=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true}); let arr=rows.map(normalizeRow).filter(x=>x.barcode&&x.name); PRODUCTS=arr; badgeData.innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün yüklendi (Sheets)':'Hiç ürün okunamadı'}`; if(PRODUCTS.length>0) showToast('Veri yüklendi'); else alert('Uygun satır bulunamadı.'); }catch(err){ alert('Google Sheets verisi okunamadı: '+err); }
+      return PRODUCTS.length;
+    }
+  );
+});
+ let arr=rows.map(normalizeRow).filter(x=>x.barcode&&x.name); PRODUCTS=arr; badgeData.innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün yüklendi (Sheets)':'Hiç ürün okunamadı'}`; if(PRODUCTS.length>0) showToast('Veri yüklendi'); else alert('Uygun satır bulunamadı.'); }catch(err){ alert('Google Sheets verisi okunamadı: '+err); }
     }).catch(err=>alert('Google Sheets’den veri alınamadı: '+err));
   });
   $('fileExcel').addEventListener('change', (ev)=>{
@@ -734,6 +726,7 @@ async function makeLabelsDoc(){
 
   /* ===== Kamera — Android (genel) — sadece EAN-13/UPC-A ===== */
   ;(function(){
+/*__PG_ANCHOR__*/
     let stream=null, scanning=false, starting=false, rafId=null, bdDetector=null, watchdogId=null, lastVideoTime=0, restartTries=0;
     const MAX_RETRIES=3; const SHEET_ID='camSheet';
 
@@ -779,6 +772,7 @@ async function makeLabelsDoc(){
 
   /* ===== Kamera — iOS ayrı buton ===== */
   ;(function(){
+/*__PG_ANCHOR__*/
     let scanning=false, starting=false, rafId=null, stream=null, bdDetector=null; const SHEET_ID='camSheetIOS';
     const sheetEl=document.createElement('div'); sheetEl.id=SHEET_ID; sheetEl.innerHTML='<div id="camBoxIOS"><div id="camHeadIOS"><b>Kamera (iOS)</b><div><button id="camCloseIOS" class="btn">Kapat</button></div></div><div id="camMountIOS"><video id="camVideoIOS" autoplay playsinline muted></video></div><div id="camFootIOS"><button id="camStopIOS" class="btn">Durdur</button></div></div>'; document.body.appendChild(sheetEl);
     const camSheet=sheetEl; const camMount=document.getElementById('camMountIOS'); const off=document.createElement('canvas'); const offctx=off.getContext('2d',{ willReadFrequently:true });
@@ -799,7 +793,8 @@ async function makeLabelsDoc(){
     }
 
     function isValidEAN13(code){ if(!/^\d{13}$/.test(code)) return false; let sum=0; for(let i=0;i<12;i++) sum += parseInt(code[i],10)*(i%2===0?1:3); return ((10-(sum%10))%10)===parseInt(code[12],10); }
-    function onDetected(code){ if(!code) return; const c=String(code).replace(/\D/g,''); if(c.length===13 && !isValidEAN13(c)) return; stopCamera(); camSheet.style.display='none'; const p=(function(){ const arr=PRODUCTS||[]; const norm=s=>String(s??'').replace(/\D/g,''); const cc=norm(c); let exact=arr.find(p=>norm(p.barcode)===cc); if(exact) return exact; if(cc.length===13){ const c12=cc.slice(1); const upc=arr.find(p=>norm(p.barcode).length===12 && norm(p.barcode)===c12); if(upc) return upc; } if(cc.length===12){ const ean=arr.find(p=>norm(p.barcode).length===13 && norm(p.barcode).slice(1)===cc); if(ean) return ean; } const suf=arr.find(p=>{const pb=norm(p.barcode); return pb.length>=8 && cc.length>=8 && (pb.endsWith(cc)||cc.endsWith(pb));}); return suf||null; })(); if(p){ openProduct(p); } else { const inp=$('inpBarcode'); if(inp){ inp.value=c.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); } } try{ if(navigator.vibrate) navigator.vibrate(35); }catch(_){}
+    function onDetected(code){ if(!code) return; const c=String(code).replace(/\D/g,''); if(c.length===13 && !isValidEAN13(c)) return; stopCamera(); camSheet.style.display='none'; const p=(function(){
+/*__PG_ANCHOR__*/ const arr=PRODUCTS||[]; const norm=s=>String(s??'').replace(/\D/g,''); const cc=norm(c); let exact=arr.find(p=>norm(p.barcode)===cc); if(exact) return exact; if(cc.length===13){ const c12=cc.slice(1); const upc=arr.find(p=>norm(p.barcode).length===12 && norm(p.barcode)===c12); if(upc) return upc; } if(cc.length===12){ const ean=arr.find(p=>norm(p.barcode).length===13 && norm(p.barcode).slice(1)===cc); if(ean) return ean; } const suf=arr.find(p=>{const pb=norm(p.barcode); return pb.length>=8 && cc.length>=8 && (pb.endsWith(cc)||cc.endsWith(pb));}); return suf||null; })(); if(p){ openProduct(p); } else { const inp=$('inpBarcode'); if(inp){ inp.value=c.slice(-6); inp.dispatchEvent(new Event('input',{bubbles:true})); } } try{ if(navigator.vibrate) navigator.vibrate(35); }catch(_){}
     }
 
     document.getElementById('btnCamIOS').addEventListener('click', startIOS);
@@ -813,7 +808,8 @@ async function makeLabelsDoc(){
 <!-- AUTO-RESTART-CAMERA PATCH -->
 <script>
 // ===== AUTO-RESTART-CAMERA PATCH v3 (Popup-aware) =====
-(function(){ 
+(function(){
+/*__PG_ANCHOR__*/ 
   const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   function safeStopCamera() {
@@ -958,6 +954,7 @@ async function makeLabelsDoc(){
 
 <script>
 (function(){
+/*__PG_ANCHOR__*/
   const overlay = document.getElementById('nfOverlay');
   const codeEl  = document.getElementById('nfCode');
   const btnRetry= document.getElementById('nfRetry');
@@ -1004,6 +1001,69 @@ async function makeLabelsDoc(){
     const code = ev && ev.detail ? ev.detail.code : undefined;
     show(code);
   });
+})();
+</script>
+
+
+<style id="progress-style">
+#pg {position:fixed; right:12px; top:12px; z-index:9999; display:none;}
+#pg .b {background:#0b1220cc; color:#e2e8f0; border:1px solid #243244; padding:8px 10px; border-radius:10px; font:600 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial; box-shadow:0 6px 18px rgba(0,0,0,.25)}
+#pg .ok{color:#22c55e} #pg .err{color:#ef4444} #pg .mut{color:#93c5fd}
+</style>
+<div id="pg"><div class="b"><span id="pgmsg">Hazır</span></div></div>
+
+
+<script>
+(function(){ 
+  const LS_KEY_PROD = 'urun_csv_url';
+  const STOCKS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQMkBejpCxER9Mq_QKxmPxkDToCkaWc4HyGAAjgOT0tvO1HjwOIbTPzRO_Lkiw8CQ/pub?output=csv";
+  const DEFAULT_PROD = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCE485ORNI2xxxHJkrfJy6IBBeso9hQHxfhZ6dkUShRQWngyeyR5VsZI7rKwBy0A/pub?output=csv";
+
+  function pg(msg, cls){ 
+    const el = document.getElementById('pg'); 
+    const m = document.getElementById('pgmsg'); 
+    el.style.display='block'; 
+    m.className = cls||''; 
+    m.textContent = msg; 
+  }
+  function pgHide(){ const el=document.getElementById('pg'); el.style.display='none'; }
+
+  async function fetchCSV(url){ 
+    pg('Bağlanılıyor: ' + url, 'mut');
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP ' + res.status + ' — ' + url);
+    const txt = await res.text();
+    if(!txt || txt.length<10) throw new Error('Boş/eksik içerik — ' + url);
+    return txt;
+  }
+
+  window.__mergeSheetsCSV = async function(loadProductsCb, loadStocksCb, applyMergedCb){ 
+    let prodUrl = localStorage.getItem(LS_KEY_PROD) || DEFAULT_PROD;
+    try{ 
+      pg('Ürünler CSV çekiliyor...', 'mut');
+      const csvP = await fetchCSV(prodUrl);
+      pg('Ürünler OK. Stok çekiliyor...', 'ok');
+      const csvS = await fetchCSV(STOCKS_URL);
+      const rowsP = loadProductsCb(csvP);
+      const rowsS = loadStocksCb(csvS);
+      pg('Birleştiriliyor...', 'mut');
+      const mergedCount = await applyMergedCb(rowsP, rowsS);
+      pg('Bitti: ' + mergedCount + ' ürün', 'ok');
+      setTimeout(pgHide, 2000);
+    } catch(e){ 
+      console.error(e);
+      if(String(e).includes('HTTP 404') || String(e).includes('Dosya bulunamadı')){ 
+        const newUrl = prompt('Ürünler CSV URL 404 döndü. Doğru CSV linkini girin (output=csv):', prodUrl);
+        if(newUrl && newUrl.trim()){ 
+          localStorage.setItem(LS_KEY_PROD, newUrl.trim());
+          pg('Yeni ürün URL kaydedildi. Tekrar denemek için butona basın.', 'mut');
+          return;
+        }
+      }
+      pg('Hata: ' + e.message, 'err');
+      alert('Sheets’ten veriler alınamadı: ' + e.message);
+    }
+  }
 })();
 </script>
 
