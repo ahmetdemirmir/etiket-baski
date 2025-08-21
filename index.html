@@ -1019,7 +1019,7 @@ box-shadow:0 8px 20px rgba(0,0,0,.35);font:600 12px/1.2 system-ui,-apple-system,
   // Esnek başlık işaretleyiciler
   const BK = ['barkod','barkodu','barkodno','ean','ean13'];
   const NK = ['stokadi','urunadi','adi','ad','stok','aciklama','stokadi1'];
-  const PK = ['satisfiyati1','satisfiyat1','sf1','fiyat','perakendesatis','magazasatis','magazasatisfiyati','magazafiyati'];
+  const PK = ['magaza','magazasatis','magazasatisfiyati','magazafiyati','satisfiyati1','satisfiyat1','satisfiyati','sf1','perakendesatis','perakende','fiyat'];
 
   function pickByKeys(row, keys){
     const NKMAP = {}; Object.keys(row).forEach(k => NKMAP[normKey(k)] = k);
@@ -1030,12 +1030,41 @@ box-shadow:0 8px 20px rgba(0,0,0,.35);font:600 12px/1.2 system-ui,-apple-system,
     return undefined;
   }
 
-  function normalizeProductRow(r){
-    const barcode = cleanBarcode(pickByKeys(r, BK));
-    const name = String(pickByKeys(r, NK) || '').trim();
-    const price = parsePrice(pickByKeys(r, PK));
-    return { barcode, name, price };
+  
+function normalizeProductRow(r){
+  const barcode = cleanBarcode(pickByKeys(r, BK));
+  const name = String(pickByKeys(r, NK) || '').trim();
+
+  // Price candidates by explicit keys
+  const candKeys = [
+    'magaza','magazasatis','magazasatisfiyati','magazafiyati',
+    'satisfiyati1','satisfiyat1','satisfiyati','sf1',
+    'perakendesatis','perakende','fiyat','satisfiyati1deg',
+    'satisfiyati1degtar','satisfiyati1degtarihi' // dates ignored later
+  ];
+  let val;
+  for(const k of candKeys){
+    const v = pickByKeys(r, [k]);
+    if(v !== undefined && v !== null && String(v).trim() !== '') { val = v; break; }
   }
+  let price = parsePrice(val);
+
+  // Fallback: scan all numeric-like fields, choose the highest reasonable
+  if(!price || price <= 0){
+    let best = 0;
+    for(const key in r){
+      const raw = r[key];
+      // Skip obviously non-price texts and dates
+      const nk = (key||'').toString().toLowerCase();
+      if(nk.includes('tarih') || nk.includes('date') || nk.includes('kod') || nk.includes('birim')) continue;
+      const n = parsePrice(raw);
+      if(isFinite(n) && n > best && n < 1000000) best = n;
+    }
+    price = best || 0;
+  }
+
+  return { barcode, name, price };
+}
 
   function normalizeStockRow(r){
     const toNum = (v)=> (v===undefined||v===null||v==='') ? 0 : Number(String(v).replace(',','.'))||0;
