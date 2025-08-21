@@ -3,120 +3,122 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fiyat Gör Etiket Bas — CSV Sürümü</title>
+<title>Fiyat Gör Etiket Bas — Ürün+Stok Merge (Akıllı Başlık Algılama)</title>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <style>
-:root{--bg:#f6f8fc;--card:#fff;--line:#e5e7eb;--ink:#0f172a;--muted:#64748b;--brand:#2563eb;--brand2:#38bdf8}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Arial,Helvetica,sans-serif}
-header{position:sticky;top:0;z-index:5;background:#fff;color:var(--brand);display:flex;align-items:center;gap:12px;justify-content:center;padding:12px;border-bottom:1px solid #dbe2f1}
-header img{height:42px}
-header h1{margin:0;font-size:1.2rem;font-weight:800}
+:root{--bg:#0b1220;--card:#0f172a;--line:#1e293b;--ink:#e2e8f0;--muted:#94a3b8;--brand:#38bdf8;--ok:#22c55e;--warn:#fbbf24;--danger:#ef4444}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Arial,Helvetica,sans-serif}
+header{position:sticky;top:0;z-index:5;background:#0b1220;color:var(--brand);display:flex;align-items:center;gap:12px;justify-content:center;padding:12px;border-bottom:1px solid #1e293b}
+header h1{margin:0;font-size:1.1rem;font-weight:800}
 .wrap{max-width:1100px;margin:auto;padding:18px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.06);padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);padding:16px}
 .control{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.input{flex:1;min-width:220px;background:#fff;border:1px solid var(--line);color:#0f172a;padding:12px;border-radius:12px;font-size:15px}
-.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
-.btn.primary{background:linear-gradient(90deg,var(--brand),var(--brand2));color:#fff}
-.btn.success{background:linear-gradient(90deg,#059669,#34d399);color:#fff}
-.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:#0b3ea9;padding:7px 10px;border-radius:999px;font-size:12px}
+.input{flex:1;min-width:220px;background:#0b1220;border:1px solid var(--line);color:#e2e8f0;padding:10px 12px;border-radius:12px;font-size:15px}
+.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:.15s transform ease}
+.btn:active{transform:translateY(1px)} .btn.primary{background:linear-gradient(90deg,#2563eb,#38bdf8);color:#fff}
+.btn.success{background:linear-gradient(90deg,#059669,#34d399);color:#fff} .btn.neutral{background:#0b1220;border:1px solid var(--line);color:#e2e8f0}
+.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#0b1220;color:#93c5fd;padding:7px 10px;border-radius:999px;font-size:12px}
 small.hint{display:block;color:var(--muted);margin-top:6px}
 .list{display:flex;flex-direction:column;gap:8px;max-height:62vh;overflow:auto;margin-top:8px}
-.item{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer}
-.item:hover{background:#f8fbff}
-.item .nm{font-weight:800}
-.item .bc{font-family:Arial,Helvetica,system-ui,sans-serif;color:#475569;font-size:12px}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:80}
-.modal.shown{display:flex}
-.box{width:min(92vw,580px);background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 16px 40px rgba(0,0,0,.2)}
+.item{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--line);background:#0b1220;border-radius:12px;padding:10px 12px;cursor:pointer}
+.item:hover{background:#0a1728} .item .nm{font-weight:800} .item .bc{font-size:12px;color:#94a3b8}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:80}
+.modal.shown{display:flex} .box{width:min(92vw,760px);background:#0b1220;border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 16px 40px rgba(0,0,0,.45)}
+.box h3{margin:0 0 8px}
+.price{font-size:32px;font-weight:900;color:#fff} .mini{font-size:12px;color:#94a3b8}
 .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
-.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#111;color:#fff;padding:12px 16px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:120}
-.toast.show{opacity:0.95}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:120}
+.toast.show{opacity:.95}
 #etiketler{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
-.etiket{background:#fff;width:280px;height:110px;border-radius:14px;box-shadow:0 1px 6px #d7d7db55;display:flex;flex-direction:row;align-items:flex-start;padding:12px 12px 8px 6px;position:relative}
+.etiket{background:#fff;width:280px;height:110px;border-radius:14px;box-shadow:0 1px 6px #00000033;display:flex;flex-direction:row;align-items:flex-start;padding:12px 12px 8px 6px;position:relative}
 .etiket-logo{width:70px;height:90px;margin-right:5px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:flex-start}
-.etiket-logo img{width:100%;height:100%;object-fit:contain}
 .etiket-icerik{flex:1;display:flex;flex-direction:column;justify-content:space-between;height:100%}
-.etiket-stokadi{font-size:13px;font-weight:500;color:#2e2e2e;line-height:1.1;min-height:36px;max-height:32px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.etiket-stokadi{font-size:13px;font-weight:600;color:#1f2937;line-height:1.1;min-height:36px;max-height:32px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .etiket-row{display:flex;align-items:flex-end;justify-content:flex-end;gap:4px}
-.etiket-fiyat{font-size:26px;color:#e20032;font-weight:650;letter-spacing:1px;margin:0;display:flex;align-items:flex-end;gap:2px;min-width:52px;justify-content:center}
-.etiket-fiyat .tlsimge{font-size:15px;margin-left:1px}
+.etiket-fiyat{font-size:26px;color:#e20032;font-weight:700;letter-spacing:1px;margin:0;display:flex;align-items:flex-end;gap:2px;min-width:52px;justify-content:center}
 .etiket-barkod{width:72px;height:54px;display:flex;flex-direction:column;align-items:flex-end}
-.etiket-barkod img{width:100%;height:44px;object-fit:contain}
+.kv{display:flex;align-items:center;gap:6px}
+table{border-collapse:collapse;border:1px solid #243244;width:100%} th,td{border:1px solid #243244;padding:6px 8px;font-size:12px}
+th{background:#111827}
 </style>
 </head>
 <body>
-<header>
-  <img src="logo.png" alt="Logo" />
-  <h1>Fiyat Gör Etiket Bas</h1>
-</header>
+<header><h1>Fiyat Gör Etiket Bas — Ürün + Stok Merge (Akıllı)</h1></header>
 
 <div class="wrap">
   <div class="card">
     <div class="control" style="justify-content:space-between">
-      <div class="control">
-        <span id="badgeData" class="badge"><i class="fa-solid fa-database"></i> Veri yüklenmedi</span>
-        <label style="display:inline-flex;align-items:center;gap:8px">
-          <input id="toggleFx" type="checkbox" checked /> <span>Ses/Titreşim</span>
-        </label>
-      </div>
-      <div class="control">
-        <button id="btnCart" class="btn"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
+      <span id="badgeData" class="badge"><i class="fa-solid fa-database"></i> Veri yüklenmedi</span>
+      <div class="kv">
+        <button id="btnDiag" class="btn neutral"><i class="fa-solid fa-stethoscope"></i> Teşhis</button>
+        <button id="btnConfig" class="btn neutral"><i class="fa-solid fa-gear"></i> Ürün URL</button>
+        <button id="btnCart" class="btn neutral"><i class="fa-solid fa-basket-shopping"></i> Sepet: <span id="cartCount">0</span></button>
         <button id="btnPrint" class="btn success"><i class="fa-solid fa-print"></i> Yazdır</button>
-        <button id="btnCam" class="btn primary"><i class="fa-solid fa-camera"></i> Kamera Aç</button>
+        <button id="btnFetchSheets" class="btn primary"><i class="fa-solid fa-cloud-download"></i> Google Sheets'ten Çek</button>
       </div>
     </div>
 
     <div class="control" style="margin-top:8px">
       <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off" />
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off" />
-      <button id="btnFetchSheets" class="btn primary"><i class="fa-solid fa-cloud-download"></i> Google Sheets'ten Çek (CSV)</button>
+      <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv" />
     </div>
-    <small class="hint">CSV'den al → arama → sepet → yazdır. Barkod son 6 hane veya ürün adıyla filtreleyebilirsin.</small>
+    <small class="hint">İlk kullanımda ürünler URL’i sorulur ve kaydedilir. İki sheet barkodla otomatik birleşir. Hata durumunda “Teşhis”e bakın.</small>
   </div>
+
+  <div id="etiketler" style="margin-top:14px"></div>
 </div>
 
+<!-- Teşhis modal -->
+<div id="mdlDiag" class="modal"><div class="box">
+  <h3>Teşhis / Parse Özeti</h3>
+  <div class="mini" id="diagSummary">Henüz yükleme yapılmadı.</div>
+  <div id="diagTables" style="margin-top:10px"></div>
+  <div class="actions" style="justify-content:flex-end">
+    <button id="btnDiagClose" class="btn neutral">Kapat</button>
+  </div>
+</div></div>
+
+<!-- Arama sonuçları -->
 <div id="mdlSearch" class="modal"><div class="box">
   <h3>Filtrelenen Ürünler</h3>
   <div class="mini">Filtre: <span id="mFilter"></span> — <span id="mCount">0</span> sonuç</div>
   <div id="mList" class="list"></div>
-  <div class="actions" style="justify-content:flex-end"><button id="btnSearchClose" class="btn">Kapat</button></div>
+  <div class="actions" style="justify-content:flex-end"><button id="btnSearchClose" class="btn neutral">Kapat</button></div>
 </div></div>
 
+<!-- Ürün popup -->
 <div id="mdlProduct" class="modal"><div class="box">
   <h3 id="mName">Ürün Adı</h3>
   <div class="price" id="mPrice">₺0,00</div>
   <div class="mini">Barkod: <span id="mBarcode"></span></div>
+  <div class="mini" id="mDateRow">Fiyat Değişiklik Tarihi: <span id="mDate"></span></div>
+  <div class="mini" id="mStocks" style="margin-top:6px;display:none"></div>
   <div class="actions">
-    <button class="btn" data-qty="1">1 Adet</button>
-    <button class="btn" id="btnCustom"><i class="fa-solid fa-plus"></i> Özel</button>
-    <button class="btn" id="btnCancel">İptal</button>
+    <button class="btn neutral" data-qty="1">1 Adet</button>
+    <button class="btn neutral" id="btnCustom"><i class="fa-solid fa-plus"></i> Özel</button>
+    <button class="btn neutral" id="btnCancel">Kapat</button>
   </div>
 </div></div>
 
+<!-- Sepet modal -->
 <div id="mdlCart" class="modal"><div class="box">
   <h3>Sepet</h3>
   <div id="cartList" class="list"></div>
+  <div class="mini">Toplam: <span id="cartTotalLbl">0</span> etiket</div>
   <div class="actions" style="justify-content:space-between">
-    <button id="btnCartClear" class="btn"><i class="fa-solid fa-trash"></i> Hepsini Temizle</button>
+    <button id="btnCartClear" class="btn neutral"><i class="fa-solid fa-trash"></i> Hepsini Temizle</button>
     <div>
-      <button id="btnCartClose" class="btn">Kapat</button>
+      <button id="btnCartClose" class="btn neutral">Kapat</button>
       <button id="btnCartPrint" class="btn success"><i class="fa-solid fa-print"></i> Yazdır (PDF)</button>
     </div>
   </div>
-</div></div>
-
-<div id="mdlPdf" class="modal"><div class="box" style="width:min(95vw,920px);height:90vh;display:flex;flex-direction:column">
-  <h3>Önizleme — Etiketler</h3>
-  <iframe id="pdfFrame" style="flex:1;border:1px solid #e5e7eb;border-radius:8px"></iframe>
-  <div class="actions" style="justify-content:flex-end"><button id="btnPdfCancel" class="btn">İptal</button><button id="btnPdfSave" class="btn success">Kaydet</button></div>
 </div></div>
 
 <div id="toast" class="toast">Veri yüklendi</div>
@@ -124,146 +126,333 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 
 <script>
 (function(){
-  const SHEETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCE485ORNI2xxxHJkrfJy6IBBeso9hQHxfhZ6dkUShRQWngyeyR5VsZI7rKwBy0A/pub?output=csv";
+  const SHEETS_URL_STOCKS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQMkBejpCxER9Mq_QKxmPxkDToCkaWc4HyGAAjgOT0tvO1HjwOIbTPzRO_Lkiw8CQ/pub?output=xlsx";
+  const LS_KEY_PRODUCTS_URL = "products_sheet_url";
 
-  let PRODUCTS=[]; 
+  let PRODUCTS = [];
   let CART = JSON.parse(localStorage.getItem('etiket_cart')||'[]');
   const $=id=>document.getElementById(id);
-  const inpBarcode=$('inpBarcode'), inpName=$('inpName'), cartCount=$('cartCount'), badgeData=$('badgeData');
+  const fmtTRY=new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'});
+  const fmtDMY=(d)=>{ try{const dt=(d instanceof Date)?d:new Date(d); if(isNaN(dt))return '—'; const dd=String(dt.getDate()).padStart(2,'0'); const mm=String(dt.getMonth()+1).padStart(2,'0'); const yy=dt.getFullYear(); return `${dd}/${mm}/${yy}`;}catch(_){ return '—'; }};
 
-  const fmtTRY=new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2});
-  const showToast=(msg)=>{const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);};
+  let lastDiag = {products:{}, stocks:{}, mergedCount:0};
 
-  function parseBarcode(v){ if(v===undefined||v===null)return''; if(typeof v==='number'){const s=String(v);return s.includes('e+')?String(Number(s)).replace(/\D/g,''):s.replace(/\D/g,'');} const s=String(v).trim(); return s.replace(/[^0-9]/g,''); }
-  function parsePrice(v){ if(v===undefined||v===null||v==='') return 0; if(typeof v==='number') return v; let s=String(v).replace(/[₺\s]/g,'').replace(/\u00A0/g,''); if(s.includes(',') && s.includes('.')){ s = s.replace(/\./g,'').replace(',', '.'); } else if(s.includes(',')){ s = s.replace(',', '.'); } return parseFloat(s)||0; }
-  function parseExcelDate(v){ if(!v&&v!==0)return null; if(v instanceof Date&&!isNaN(v))return v; if(typeof v==='number'){const epoch=new Date(1899,11,30);return new Date(epoch.getTime()+v*86400000);} const str=String(v).trim(); const m=str.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/); if(m){const d=new Date(+m[3],+m[2]-1,+m[1]); if(!isNaN(d))return d;} const d=new Date(str); return isNaN(d)?null:d; }
+  function showToast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);}
+  function parseBarcode(v){ if(v===undefined||v===null)return''; if(typeof v==='number'){const s=String(v); return s.includes('e+')?String(Math.trunc(v)).replace(/\\D/g,''):s.replace(/\\D/g,'');} return String(v).replace(/\\D/g,''); }
+  function parsePrice(v){ if(v===undefined||v===null||v==='') return 0; if(typeof v==='number') return v; let s=String(v).replace(/[₺\\s]/g,'').replace(/\\u00A0/g,''); if(s.includes(',')&&s.includes('.')){ s=s.replace(/\\./g,'').replace(',', '.'); } else if(s.includes(',')){ s=s.replace(',', '.'); } return parseFloat(s)||0; }
+  function parseExcelDate(v){ if(!v&&v!==0)return null; if(v instanceof Date&&!isNaN(v))return v; if(typeof v==='number'){ const epoch=new Date(1899,11,30); return new Date(epoch.getTime()+v*86400000);} const str=String(v).trim(); const m=str.match(/(\\d{1,2})[.\\/\\-](\\d{1,2})[.\\/\\-](\\d{2,4})/); if(m){ const d=new Date(+m[3],+m[2]-1,+m[1]); if(!isNaN(d))return d;} const d=new Date(str); return isNaN(d)?null:d; }
   function normKey(s){return String(s||'').toLowerCase().replace(/[ıİ]/g,'i').replace(/[öÖ]/g,'o').replace(/[üÜ]/g,'u').replace(/[ğĞ]/g,'g').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');}
-  function mapRowByKeys(row){ const nk={};Object.keys(row).forEach(k=>nk[normKey(k)]=k);
-    const pick=(syns)=>{for(const s of syns){for(const k in nk){if(k===s||k.includes(s))return row[nk[k]];}} return undefined;};
-    const barcode=pick(['barkod','barkodno','barkodu','ean','ean13']);
-    const name=pick(['stokadi','urunadi','adi','ad','stok','aciklama']);
-    const price=pick(['magaza','magazasatis','magazasatisfiyati','magazafiyati','satisfiyati1','satisfiyat1','sf1','fiyat','perakendesatis']);
-    const date=pick(['satisfiyati1degtar','satisfiyati1degtarihi','fiyatdegisikliktarihi','fiyatdegtarihi','fdtarihi','degisiktarihi','degistarihi','fiyatguncellemetarihi']);
-    return {barcode,name,price,date};
-  }
-  function normalizeRow(r){ const m=mapRowByKeys(r); return { barcode:parseBarcode(m.barcode), name:String(m.name||'').trim(), price:parsePrice(m.price), priceDate:parseExcelDate(m.date) }; }
 
-  async function fetchCSV(url){
-    const res = await fetch(url,{cache:'no-cache'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const text = await res.text();
-    // XLSX can parse CSV string directly
-    const wb = XLSX.read(text,{type:'string'});
-    const sheet=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(sheet,{defval:'',raw:true,cellDates:true});
-    return rows;
-  }
+  // === Başlık algılama: Uygun satır bulunamadı hatası için sağlamlaştırma ===
+  const BK= ['barkod','barkodno','ean','ean13'];
+  const NK= ['stokadi','urunadi','adi','ad','stok','aciklama','stokadi1'];
+  const PK= ['magaza','magazasatis','magazasatisfiyati','magazafiyati','satisfiyati1','satisfiyat1','sf1','fiyat','perakendesatis'];
+  const DK= ['satisfiyati1degtar','satisfiyati1degtarihi','fiyatdegisikliktarihi','fiyatdegtarihi','fdtarihi','degisiktarihi','degistarihi','fiyatguncellemetarihi','tarih'];
 
-  async function loadFromCSV(){
-    const rows = await fetchCSV(SHEETS_URL);
-    let arr=rows.map(normalizeRow).filter(x=>x.barcode&&x.name);
-    if(arr.length===0) throw new Error('Uygun satır bulunamadı (başlıklar uyuşmuyor olabilir).');
-    PRODUCTS=arr;
-    badgeData.innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length} ürün yüklendi (CSV)`;
-    showToast('Veri yüklendi');
+  function findHeaderRow(rows){ // rows: header:1 çıktısı (array of arrays)
+    // Bul: içinde en az bir barcode anahtarına benzeyen hücre olan satır
+    for(let i=0;i<Math.min(rows.length,30);i++){
+      const r=rows[i].map(x=> normKey(x));
+      const hasB = r.some(c=> BK.some(k=> c.includes(k)));
+      if(hasB) return i;
+    }
+    // Yedek: en uzun hücre sayılı satır
+    let bestIdx=0, bestLen=0;
+    rows.forEach((r,i)=>{ if(r.length>bestLen){ bestLen=r.length; bestIdx=i; } });
+    return bestIdx;
   }
 
-  $('btnFetchSheets').addEventListener('click', async ()=>{
-    try{ await loadFromCSV(); }catch(err){ alert(err.message||err); }
-  });
+  function sheetToJsonSmart(sheet){
+    // 1) Normal dene
+    let rows = XLSX.utils.sheet_to_json(sheet, {defval:'', raw:true, cellDates:true});
+    if(rows && rows.length) return rows;
 
-  function setCart(n){ CART=n; localStorage.setItem('etiket_cart',JSON.stringify(CART)); cartCount.textContent=CART.reduce((a,x)=>a+x.qty,0); }
+    // 2) Başlık 1 modunda al, başlık satırını bul
+    const arr = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+    if(!arr || !arr.length) return [];
+    const hdrIdx = findHeaderRow(arr);
+    const header = arr[hdrIdx];
+    const data = arr.slice(hdrIdx+1);
+    // header + data'yı yeni sheet gibi işleyelim
+    const aoa = [header, ...data];
+    const tmpWs = XLSX.utils.aoa_to_sheet(aoa);
+    return XLSX.utils.sheet_to_json(tmpWs, {defval:'', raw:true, cellDates:true});
+  }
+
+  function mapRowByKeys(row){
+    const nk={};Object.keys(row).forEach(k=>nk[normKey(k)]=k);
+    const pick=(keys)=>{for(const s of keys){ if(nk[s]) return row[nk[s]]; for(const k in nk){ if(k.includes(s)) return row[nk[k]]; }} return undefined;};
+    const barcode=pick(BK);
+    const name=pick(NK);
+    const price=pick(PK);
+    const date=pick(DK);
+    return {barcode,name,price,date, _columns:Object.keys(row)};
+  }
+  function normalizeRow(r){ const m=mapRowByKeys(r); return { barcode:parseBarcode(m.barcode), name:String(m.name||'').trim(), price:parsePrice(m.price), priceDate:parseExcelDate(m.date), _columns:m._columns }; }
+
+  function mapRowByKeysStocks(row){
+    const nk={}; Object.keys(row).forEach(k=> nk[normKey(k)] = k );
+    const pick=(arr)=>{ for(const c of arr){ if(nk[c]) return row[nk[c]]; } return undefined; };
+    return {
+      barcode : pick(BK),
+      depo    : pick(['depo','anadepo','fethiyedepo','depostok','fethiyedepostok']),
+      merkez  : pick(['merkez','merkezsube','merkezstok']),
+      ataevler: pick(['ataevler','ataevlersube','ataevlerstok']),
+      topkapi : pick(['topkapi','topkapisube','topkapistok']),
+      fethiyesube: pick(['fethiyesube','fethiye4sube','fethiyesubestok','fethiyesube4'])
+    };
+  }
+  function normalizeStockRow(r){
+    const m=mapRowByKeysStocks(r);
+    const toNum = v => (v===undefined||v===null||v==='') ? 0 : Number(String(v).replace(',','.'))||0;
+    return {
+      barcode    : parseBarcode(m.barcode),
+      depo       : toNum(m.depo),
+      merkez     : toNum(m.merkez),
+      ataevler   : toNum(m.ataevler),
+      topkapi    : toNum(m.topkapi),
+      fethiyesube: toNum(m.fethiyesube)
+    };
+  }
+
+  function setCart(n){ CART=n; localStorage.setItem('etiket_cart',JSON.stringify(CART)); $('cartCount').textContent=CART.reduce((a,x)=>a+x.qty,0); }
   setCart(CART);
 
-  function showResults(title,arr){
-    $('mFilter').textContent=title; $('mCount').textContent=arr.length;
-    const L=$('mList'); L.innerHTML='';
-    arr.slice(0,200).forEach(p=>{
-      const li=document.createElement('div'); li.className='item';
-      li.innerHTML=`<div><div class="nm">${p.name}</div><div class="bc">${p.barcode}</div></div><div style="font-weight:900">${fmtTRY.format(p.price)}</div>`;
-      li.onclick=()=>{ $('mdlSearch').classList.remove('shown'); openProduct(p); };
-      L.appendChild(li);
-    });
-    $('mdlSearch').classList.add('shown');
+  function promptProductsUrl(initial){
+    const v = prompt("Ürünler Google Sheets paylaşım URL’inizi girin (CSV veya XLSX):", initial||"");
+    if(v && v.trim()){
+      localStorage.setItem(LS_KEY_PRODUCTS_URL, v.trim());
+      return v.trim();
+    }
+    return null;
   }
-  function filterByName(q){ const s=q.trim().toLowerCase(); if(s.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=>p.name.toLowerCase().includes(s)); if(res.length) showResults(`Ad: "${q}"`,res); else $('mdlSearch').classList.remove('shown'); }
-  function filterByLast6(v){ const t=v.replace(/\D/g,''); if(t.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=>p.barcode.endsWith(t)); if(res.length) showResults(`Barkod son: ${t}`,res); else $('mdlSearch').classList.remove('shown'); }
-  $('inpName').addEventListener('input', ()=>{ filterByName(inpName.value); });
-  $('inpBarcode').addEventListener('input', ()=>{ filterByLast6(inpBarcode.value); });
+
+  function buildLabelNode(it){
+    const canvas=document.createElement('canvas');
+    const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
+    JsBarcode(canvas,it.barcode,{format:fmt,height:48,width:2.2,displayValue:true,font:'Arial',fontSize:14,textMargin:2,margin:0,lineColor:'#000'});
+    const barPng=canvas.toDataURL('image/png');
+    const priceStr=fmtTRY.format(it.price).replace('₺','');
+    const wrap=document.createElement('div'); wrap.className='etiket';
+    wrap.innerHTML=`<div class="etiket-logo"><div style="font-weight:800;color:#2563eb">DEMIR</div></div>
+      <div class="etiket-icerik">
+        <div class="etiket-stokadi">${it.name}</div>
+        <div class="etiket-row">
+          <div class="etiket-fiyat">${priceStr}&nbsp;₺</div>
+          <div class="etiket-barkod"><img src="${barPng}" style="width:100%;height:44px;object-fit:contain"/></div>
+        </div>
+      </div>`;
+    return wrap;
+  }
+
+  async function fetchTextOrArrayBuffer(url){
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const ct = (res.headers.get('content-type')||'').toLowerCase();
+    if(ct.includes('text') || url.includes('output=csv') || url.endsWith('.csv')){
+      return {kind:'text', data: await res.text()};
+    }else{
+      return {kind:'array', data: await res.arrayBuffer()};
+    }
+  }
+  async function parseSheetSmart(raw){
+    if(raw.kind==='text'){
+      const wb = XLSX.read(raw.data, {type:'string'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return sheetToJsonSmart(ws);
+    }else{
+      const wb = XLSX.read(new Uint8Array(raw.data), {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return sheetToJsonSmart(ws);
+    }
+  }
+
+  async function loadSheetsPair(){
+    let productsUrl = localStorage.getItem(LS_KEY_PRODUCTS_URL);
+    if(!productsUrl){
+      productsUrl = promptProductsUrl("https://docs.google.com/spreadsheets/d/e/.../pub?output=csv");
+      if(!productsUrl) { alert("Ürünler URL’i gerekli."); return; }
+    }
+
+    const [pRaw, sRaw] = await Promise.all([
+      fetchTextOrArrayBuffer(productsUrl),
+      fetchTextOrArrayBuffer(SHEETS_URL_STOCKS)
+    ]);
+
+    const rowsP = await parseSheetSmart(pRaw);
+    const rowsS = await parseSheetSmart(sRaw);
+
+    const mappedP = rowsP.map(normalizeRow);
+    const prod = mappedP.filter(x=>x.barcode && x.name);
+    const mappedS = rowsS.map(normalizeStockRow);
+    const stocks = mappedS.filter(x=>x.barcode);
+
+    // Teşhis
+    lastDiag.products = { total: rowsP.length, mapped: mappedP.length, withBarcodeName: prod.length, sample: mappedP.slice(0,5) };
+    lastDiag.stocks   = { total: rowsS.length, mapped: mappedS.length, withBarcode: stocks.length, sample: mappedS.slice(0,5) };
+
+    if(prod.length === 0){
+      const cols = rowsP[0] ? Object.keys(rowsP[0]) : [];
+      alert("Ürünler sayfasında 'barkod' ve 'stok adı/fiyat' başlıkları tespit edilemedi.\nLütfen Teşhis'e tıklayıp görünen başlıkları kontrol edin.");
+      return;
+    }
+    if(stocks.length === 0){
+      alert("Stok sayfasında 'barkod' ve şube stok başlıkları tespit edilemedi.\nLütfen Teşhis'e tıklayıp görünen başlıkları kontrol edin.");
+      return;
+    }
+
+    const stockMap=new Map();
+    for(const s of stocks){
+      const prev=stockMap.get(s.barcode)||{depo:0,merkez:0,ataevler:0,topkapi:0,fethiyesube:0};
+      stockMap.set(s.barcode,{
+        depo:prev.depo+(s.depo||0),
+        merkez:prev.merkez+(s.merkez||0),
+        ataevler:prev.ataevler+(s.ataevler||0),
+        topkapi:prev.topkapi+(s.topkapi||0),
+        fethiyesube:prev.fethiyesube+(s.fethiyesube||0)
+      });
+    }
+
+    PRODUCTS = prod.map(p=>({
+      ...p,
+      stocks: stockMap.get(p.barcode)||{depo:0,merkez:0,ataevler:0,topkapi:0,fethiyesube:0}
+    }));
+
+    lastDiag.mergedCount = PRODUCTS.length;
+
+    $('badgeData').innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün + stok (Sheets)': 'Hiç ürün okunamadı'}`;
+    showToast('Ürün + stok verisi yüklendi');
+
+    const grid=$('etiketler'); grid.innerHTML='';
+    PRODUCTS.slice(0,6).forEach(p=> grid.appendChild(buildLabelNode(p)) );
+  }
+
+  // Teşhis modalı
+  function openDiag(){
+    const s = lastDiag;
+    const sum = `Ürünler: ${s.products.withBarcodeName}/${s.products.total} satır uygun • Stoklar: ${s.stocks.withBarcode}/${s.stocks.total} satır uygun • Merge: ${s.mergedCount} ürün`;
+    $('diagSummary').textContent = sum;
+
+    const d = $('diagTables');
+    const tbl = (title, arr)=>{
+      const cols = arr && arr.length ? Object.keys(arr[0]) : [];
+      const head = cols.map(c=>`<th>${c}</th>`).join('');
+      const rows = (arr||[]).map(r=> `<tr>${cols.map(c=>`<td>${String(r[c])}</td>`).join('')}</tr>`).join('');
+      return `<h4>${title}</h4><div style="overflow:auto;max-height:42vh"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    };
+    d.innerHTML = tbl('Ürünler (örnek 5)', s.products.sample) + tbl('Stoklar (örnek 5)', s.stocks.sample);
+    $('mdlDiag').classList.add('shown');
+  }
+
+  // ==== eventler ====
+  $('btnFetchSheets').onclick = async ()=>{
+    try{ await loadSheetsPair(); }
+    catch(e){
+      alert('Sheets’ten veriler alınamadı: ' + e.message + '\\nÜrünler URL’ini güncelleyin.');
+    }
+  };
+  $('btnConfig').onclick = ()=>{
+    const cur = localStorage.getItem(LS_KEY_PRODUCTS_URL)||'';
+    const v = prompt("Ürünler Google Sheets paylaşım URL’inizi girin (CSV veya XLSX):", cur);
+    if(v && v.trim()){ localStorage.setItem(LS_KEY_PRODUCTS_URL, v.trim()); alert('Ürünler URL’i kaydedildi.'); }
+  };
+  $('btnDiag').onclick = openDiag;
+  $('btnDiagClose').onclick = ()=> $('mdlDiag').classList.remove('shown');
+
+  // Arama
+  const inpBarcode=$('inpBarcode'), inpName=$('inpName');
+  function showResults(title,arr){ $('mFilter').textContent=title; $('mCount').textContent=arr.length; const L=$('mList'); L.innerHTML=''; arr.slice(0,200).forEach(p=>{ const li=document.createElement('div'); li.className='item'; li.innerHTML=`<div><div class="nm">${p.name}</div><div class="bc">${p.barcode}</div></div><div style="font-weight:900">${fmtTRY.format(p.price)}</div>`; li.onclick=()=>{ $('mdlSearch').classList.remove('shown'); openProduct(p); }; L.appendChild(li); }); $('mdlSearch').classList.add('shown'); }
+  function filterByName(q){ const s=q.trim().toLowerCase(); if(s.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=> (p.name||'').toLowerCase().includes(s)); if(res.length) showResults(`Ad: "${q}"`,res); else $('mdlSearch').classList.remove('shown'); }
+  function filterByLast6(v){ const t=v.replace(/\\D/g,''); if(t.length<2){ $('mdlSearch').classList.remove('shown'); return; } const res=PRODUCTS.filter(p=> String(p.barcode).endsWith(t)); if(res.length) showResults(`Barkod son: ${t}`,res); else $('mdlSearch').classList.remove('shown'); }
+  inpName.addEventListener('input', ()=> filterByName(inpName.value));
+  inpBarcode.addEventListener('input', ()=> filterByLast6(inpBarcode.value));
   $('btnSearchClose').addEventListener('click', ()=> $('mdlSearch').classList.remove('shown'));
 
-  const mdl=$('mdlProduct');
-  window.openProduct=function(p){
-    $('mName').textContent=p.name; $('mPrice').textContent=fmtTRY.format(p.price); $('mBarcode').textContent=p.barcode;
-    mdl.classList.add('shown');
+  function openProduct(p){
+    $('mName').textContent=p.name;
+    $('mPrice').textContent=fmtTRY.format(p.price);
+    $('mBarcode').textContent=p.barcode;
+    $('mDate').textContent=p.priceDate?fmtDMY(p.priceDate):'—';
+    const stok=p.stocks||{};
+    const sTxt=`<b>Stoklar:</b> Depo ${stok.depo??0} • Merkez ${stok.merkez??0} • Ataevler ${stok.ataevler??0} • Topkapı ${stok.topkapi??0} • Fethiye Şube ${stok.fethiyesube??0}`;
+    const mS=$('mStocks'); mS.style.display='block'; mS.innerHTML=sTxt;
+
+    const mdl=$('mdlProduct'); mdl.classList.add('shown');
     mdl.querySelectorAll('[data-qty]').forEach(b=> b.onclick=()=> addToCart(p,parseInt(b.dataset.qty)));
     $('btnCustom').onclick=()=>{ const q=parseInt(prompt('Kaç adet?','1')); if(q>0) addToCart(p,q); };
-    $('btnCancel').onclick=()=>{ mdl.classList.remove('shown'); };
+    $('btnCancel').onclick=()=> mdl.classList.remove('shown');
   }
-  function addToCart(p,qty){ const idx=CART.findIndex(x=>x.barcode===p.barcode); if(idx>-1) CART[idx].qty+=qty; else CART.push({barcode:p.barcode,name:p.name,price:p.price,qty}); setCart(CART); mdl.classList.remove('shown'); }
+  function addToCart(p,qty){ const idx=CART.findIndex(x=>x.barcode===p.barcode); if(idx>-1) CART[idx].qty+=qty; else CART.push({barcode:p.barcode,name:p.name,price:p.price,qty}); setCart(CART); $('mdlProduct').classList.remove('shown'); }
 
   function renderCart(){
     const L=$('cartList'); L.innerHTML='';
     CART.forEach((it,idx)=>{
       const row=document.createElement('div'); row.className='item';
-      row.innerHTML=`<div><div class="nm">${it.name}</div><div class="bc">${it.barcode}</div></div><div>${fmtTRY.format(it.price)} • ${it.qty} adet</div>`;
-      row.onclick=()=>{};
+      row.innerHTML=`<div><div class="nm">${it.name}</div><div class="bc">${it.barcode} • ${fmtTRY.format(it.price)}</div></div>
+                     <div style="display:flex;align-items:center;gap:6px">
+                       <button class="btn neutral dec" data-idx="${idx}">-</button>
+                       <b>${it.qty}</b>
+                       <button class="btn neutral inc" data-idx="${idx}">+</button>
+                       <button class="btn neutral del" data-idx="${idx}"><i class="fa-solid fa-trash"></i></button>
+                     </div>`;
       L.appendChild(row);
     });
+    $('cartTotalLbl').textContent=CART.reduce((a,x)=>a+x.qty,0);
   }
   $('btnCart').addEventListener('click', ()=>{ renderCart(); $('mdlCart').classList.add('shown'); });
   $('btnCartClose').addEventListener('click', ()=> $('mdlCart').classList.remove('shown'));
   $('btnCartClear').addEventListener('click', ()=>{ if(confirm('Sepeti tamamen temizle?')){ setCart([]); renderCart(); } });
+  $('cartList').addEventListener('click', (e)=>{
+    const t=e.target.closest('button'); if(!t) return; const idx=+t.dataset.idx;
+    if(t.classList.contains('inc')) CART[idx].qty++;
+    else if(t.classList.contains('dec')) CART[idx].qty=Math.max(1,CART[idx].qty-1);
+    else if(t.classList.contains('del')) CART.splice(idx,1);
+    setCart(CART); renderCart();
+  });
   $('btnCartPrint').addEventListener('click', ()=>{ $('mdlCart').classList.remove('shown'); $('btnPrint').click(); });
 
-  $('btnPrint').addEventListener('click', async ()=>{
-    if(CART.length===0){ alert('Sepet boş.'); return; }
-    const doc = await makeLabelsDoc();
-    const blob = doc.output('blob');
-    const url = URL.createObjectURL(blob);
-    $('pdfFrame').src = url; $('mdlPdf').classList.add('shown');
-  });
-  $('btnPdfCancel').addEventListener('click', ()=> $('mdlPdf').classList.remove('shown'));
-  $('btnPdfSave').addEventListener('click', ()=>{ window.jspdf ? __doc.save('etiketler.pdf') : null; });
-
-  let __doc=null;
   async function makeLabelsDoc(){
-    const { jsPDF }=window.jspdf;
-    const A4W=210, A4H=297, margin=5;
+    const { jsPDF }=window.jspdf; const A4W=210, A4H=297, margin=5;
+    const doc=new jsPDF({unit:'mm',format:'a4'});
     const labels=[]; CART.forEach(it=>{ for(let i=0;i<it.qty;i++) labels.push(it); });
-    const cols=3, rows=8, gap=6;
-    const per=cols*rows, pages=Math.max(1, Math.ceil(labels.length/per));
-    const doc=new jsPDF({unit:'mm',format:'a4'}); __doc=doc;
+    const per=24; const pages=Math.max(1, Math.ceil(labels.length/per));
     const work=document.getElementById('work'); work.innerHTML='';
     for(let p=0;p<pages;p++){
       if(p>0) doc.addPage();
-      const slice=labels.slice(p*per, p*per+per);
-      const page=document.createElement('div'); page.style.cssText="width:794px;height:1123px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:12px;background:#fff";
-      slice.forEach(it=>{ if(!it) return; page.appendChild(buildLabelNode(it)); });
+      const page=document.createElement('div');
+      page.style.cssText='width:794px;height:1123px;display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:1fr;gap:6px;padding:12px;background:#fff;';
+      const slice=labels.slice(p*per,p*per+per);
+      slice.forEach(it=>{ const cell=document.createElement('div'); cell.style.cssText='position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:6px;'; cell.appendChild(buildLabelNode(it)); page.appendChild(cell); });
       work.appendChild(page);
-      const canvas = await html2canvas(page,{scale:4,useCORS:true,background:'#fff'});
-      const img = canvas.toDataURL('image/jpeg',0.92);
+      const canvas=await html2canvas(page,{scale:3,background:'#fff'});
+      const img=canvas.toDataURL('image/jpeg',0.92);
       doc.addImage(img,'JPEG',margin,margin,A4W-margin*2,A4H-margin*2);
     }
     return doc;
   }
+  $('btnPrint').addEventListener('click', async ()=>{
+    if(CART.length===0){ alert('Sepet boş.'); return; }
+    makeLabelsDoc().then(doc=>doc.save('etiketler.pdf'));
+  });
 
-  function buildLabelNode(it){
-    const wrap=document.createElement('div'); wrap.className='etiket';
-    const canvas=document.createElement('canvas');
-    const fmt=/^[0-9]{13}$/.test(it.barcode)?'EAN13':'CODE128';
-    JsBarcode(canvas,it.barcode,{format:fmt,height:48,width:2.2,displayValue:true,font:'Arial',fontSize:14,textMargin:2,margin:0,lineColor:'#000'});
-    const barPng=canvas.toDataURL('image/jpeg',0.82);
-    wrap.innerHTML=`<div class="etiket-logo"><img src="logo.png" alt="Logo" crossorigin="anonymous"></div>
-      <div class="etiket-icerik">
-        <div class="etiket-stokadi">${it.name}</div>
-        <div class="etiket-row">
-          <div class="etiket-fiyat">${new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(it.price)} <span class="tlsimge"></span></div>
-          <div class="etiket-barkod"><img src="${barPng}" alt="Barkod"></div>
-        </div>
-      </div>`;
-    return wrap;
-  }
+  // Excel manuel yükleme (opsiyonel)
+  $('fileExcel').addEventListener('change', async (ev)=>{
+    const f=ev.target.files[0]; if(!f) return;
+    const ext=(f.name.split('.').pop()||'').toLowerCase();
+    const r=new FileReader();
+    r.onload=e=>{
+      const wb = ext==='csv' ? XLSX.read(e.target.result,{type:'string'}) : XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const sheet=wb.Sheets[wb.SheetNames[0]];
+      let rows=sheetToJsonSmart(sheet);
+      PRODUCTS = rows.map(normalizeRow).filter(x=>x.barcode&&x.name);
+      $('badgeData').innerHTML=`<i class="fa-solid fa-database"></i> ${PRODUCTS.length>0?PRODUCTS.length+' ürün (Excel)': 'Hiç ürün okunamadı'}`;
+      showToast('Excel verisi yüklendi');
+    };
+    if(ext==='csv') r.readAsText(f); else r.readAsArrayBuffer(f);
+  });
+
+  // Teşhis kısa yol
+  window.__etiketDiag = ()=>lastDiag;
 })();</script>
 </body>
 </html>
