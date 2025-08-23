@@ -562,7 +562,7 @@ async function makeLabelsDoc(){
     const slice = labels.slice(p*per, p*per + per);
     while(slice.length < per) slice.push(null);
 
-    const pageNode = await renderPageWithOriginalDOM(doc, slice.filter(Boolean));
+    const pageNode = await renderPageWithOriginalDOM(doc, slice);
     work.appendChild(pageNode);
 
     // Yüksek çözünürlük: scale = 6
@@ -597,42 +597,49 @@ async function renderPageWithOriginalDOM(doc, labelsSlice){
   const page = document.createElement('div');
   page.style.cssText = `width:${pagePxW}px;height:${pagePxH}px;display:grid;grid-template-columns:repeat(${cols},${cellW}px);grid-auto-rows:${cellH}px;gap:${gap}px;padding:${pad}px;background:#fff;`;
 
-  for(let i=0;i<labelsSlice.length;i++){
-    const it = labelsSlice[i];
-    const colIndex = i % cols; // 0: sol, 1: orta, 2: sağ
+  // Column-major placement: left column fills top-to-bottom, then middle, then right.
+  for(let r=0; r<rows; r++){
+    for(let c=0; c<cols; c++){
+      const idx = c*rows + r; // column-major index into labelsSlice
+      const it = labelsSlice[idx] || null;
 
-    const cell = document.createElement('div');
-    cell.style.cssText = "position:relative;overflow:visible;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:6px;";
+      const cell = document.createElement('div');
+      cell.style.cssText = "position:relative;overflow:visible;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:6px;";
 
-    let node = buildLabelNode(it);
+      if(it){
+        let node = buildLabelNode(it);
 
-    const off = document.createElement('div');
-    off.style.cssText="position:absolute;left:-10000px;top:-10000px;opacity:0;";
-    off.appendChild(node);
-    document.body.appendChild(off);
-    const rect = node.getBoundingClientRect();
-    const naturalW = Math.max(1, rect.width);
-    const naturalH = Math.max(1, rect.height);
-    document.body.removeChild(off);
+        // measure natural size once to get accurate scale inside cell
+        const off = document.createElement('div');
+        off.style.cssText="position:absolute;left:-10000px;top:-10000px;opacity:0;";
+        off.appendChild(node);
+        document.body.appendChild(off);
+        const rect = node.getBoundingClientRect();
+        const naturalW = Math.max(1, rect.width);
+        const naturalH = Math.max(1, rect.height);
+        document.body.removeChild(off);
 
-    const scale = Math.min(cellW / naturalW, cellH / naturalH);
+        const scale = Math.min(cellW / naturalW, cellH / naturalH);
 
-    const scaler = document.createElement('div');
-    scaler.style.cssText = `width:${Math.round(naturalW*scale)}px;height:${Math.round(naturalH*scale)}px;transform-origin:top left;`;
-    node.style.transformOrigin = "top left";
-    node.style.transform = `scale(${scale})`;
-    scaler.appendChild(node);
+        const scaler = document.createElement('div');
+        scaler.style.cssText = `width:${Math.round(naturalW*scale)}px;height:${Math.round(naturalH*scale)}px;transform-origin:top left;`;
+        node.style.transformOrigin = "top left";
+        node.style.transform = `scale(${scale})`;
+        scaler.appendChild(node);
 
-    const holder = document.createElement('div');
-    holder.style.cssText = "position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;";
-    holder.appendChild(scaler);
+        const holder = document.createElement('div');
+        holder.style.cssText = "position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;";
+        holder.appendChild(scaler);
 
-    // Kenar kolon kaydırmaları
-    if(colIndex===0){ holder.style.transform = `translateX(-${EDGE_SHIFT_PX}px)`; }
-    else if(colIndex===2){ holder.style.transform = `translateX(${EDGE_SHIFT_PX}px)`; }
+        // Edge column micro-shift
+        if(c===0){ holder.style.transform = `translateX(-${EDGE_SHIFT_PX}px)`; }
+        else if(c===2){ holder.style.transform = `translateX(${EDGE_SHIFT_PX}px)`; }
 
-    cell.appendChild(holder);
-    page.appendChild(cell);
+        cell.appendChild(holder);
+      }
+      // Even if empty, append the cell to keep grid structure
+      page.appendChild(cell);
+    }
   }
   return page;
 }
