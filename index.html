@@ -122,9 +122,50 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
 
 /* Modern confirm modal */
 .modal .confirmRow{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+
+/* === DK: Canlı Adet Butonları === */
+.actions .qty-btn{ color:#fff !important; font-weight:800; border:none !important; border-radius:14px; box-shadow:0 6px 16px rgba(0,0,0,.10) }
+.actions .qty-btn.one{ padding:1.05rem 1.25rem !important; font-size:17px !important }
+.actions .c-1{ background:#1570ef }  /* mavi */
+.actions .c-2{ background:#10b981 }  /* yeşil */
+.actions .c-3{ background:#f59e0b }  /* amber */
+.actions .c-4{ background:#06b6d4 }  /* camgöbeği */
+.actions .c-5{ background:#7c3aed }  /* mor */
+.actions .c-6{ background:#22c55e }  /* yeşil-2 */
+.actions .c-7{ background:#0ea5e9 }  /* açık mavi */
+.actions .c-8{ background:#ef4444 }  /* kırmızı */
+.actions .c-9{ background:#a855f7 }  /* menekşe */
+.actions .c-10{ background:#d946ef } /* fuşya */
+</style>
+<style>
+/* 🔊 Sesi Etkinleştir toast */
+#soundUnlockToast{
+  position:fixed; z-index:2147483647; right:16px; bottom:16px;
+  background:rgba(20,20,20,.92); color:#fff; padding:14px 16px;
+  border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,.35);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; font-size:14px;
+  display:flex; align-items:center; gap:10px;
+}
+#soundUnlockToast button{
+  appearance:none; border:0; border-radius:10px; padding:8px 12px;
+  background:#00c853; color:#fff; font-weight:600; cursor:pointer;
+}
+#soundUnlockToast.hidden{ display:none; }
 </style>
 </head>
 <body>
+
+<!-- 🔊 Preloaded Audio Files -->
+<audio id="sndMatch" src="sounds/match.mp3" preload="auto"></audio>
+<audio id="sndCart"  src="sounds/cart.mp3"  preload="auto"></audio>
+<audio id="sndFail"  src="sounds/fail.mp3"  preload="auto"></audio>
+
+
+<!-- 🔊 Preloaded Audio Files -->
+<audio id="sndMatch" src="sounds/match.mp3" preload="auto"></audio>
+<audio id="sndCart"  src="sounds/cart.mp3"  preload="auto"></audio>
+<audio id="sndFail"  src="sounds/fail.mp3"  preload="auto"></audio>
+
 <header>
   <img src="logo.png" alt="Logo" />
   <h1>Fiyat Gör Etiket Bas</h1>
@@ -148,7 +189,7 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
     </div>
 
     <div class="control" style="margin-top:8px">
-      <input id="inpBarcode" class="input" type="text" placeholder="Barkod SON 6 hane" autocomplete="off" />
+      <input id="inpBarcode" class="input" type="tel" placeholder="Barkod SON 6 hane" autocomplete="off" inputmode="numeric" pattern="[0-9]*" enterkeyhint="search"/>
       <input id="inpName" class="input" type="text" placeholder="Ürün adı" autocomplete="off" />
       <input id="fileExcel" type="file" accept=".xlsx,.xls,.csv" />
       <button id="btnFetchSheets" class="btn primary"><i class="fa-solid fa-cloud-download"></i> Google Sheets'ten Çek</button>
@@ -186,10 +227,21 @@ small.hint{display:block;color:var(--muted);margin-top:6px}
   </div>
 
   <div class="actions">
-    <button class="btn" data-qty="1">1 Adet</button>
-    <button class="btn" id="btnCustom"><i class="fa-solid fa-plus"></i> Özel</button>
-    <button class="btn danger" id="btnCancel">İptal</button>
-  </div>
+
+  <button id="btnQty1" class="btn qty-btn one c-1" data-qty="1">1 Adet</button>
+  <button class="btn qty-btn c-2"  data-qty="2">2 Adet</button>
+  <button class="btn qty-btn c-3"  data-qty="3">3 Adet</button>
+  <button class="btn qty-btn c-4"  data-qty="4">4 Adet</button>
+  <button class="btn qty-btn c-5"  data-qty="5">5 Adet</button>
+  <button class="btn qty-btn c-6"  data-qty="6">6 Adet</button>
+  <button class="btn qty-btn c-7"  data-qty="7">7 Adet</button>
+  <button class="btn qty-btn c-8"  data-qty="8">8 Adet</button>
+  <button class="btn qty-btn c-9"  data-qty="9">9 Adet</button>
+  <button class="btn qty-btn c-10" data-qty="10">10 Adet</button>
+  <button class="btn danger" id="btnCancel">İptal</button>
+  <button class="btn" id="btnCustom" style="display:none" aria-hidden="true" tabindex="-1">Özel</button>
+
+</div></div>
 </div></div>
 
 <!-- Sepet modal -->
@@ -268,7 +320,7 @@ const inpBarcode=$('inpBarcode'), inpName=$('inpName'), cartCount=$('cartCount')
 const fmtTRY=new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2});
 const monthsDiff=(d)=>((new Date())-d)/(1000*60*60*24*30);
 const showToast=(msg)=>{const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);};
-const beep=(ok=true)=>{ if(!FX) return; try{const a=new (window.AudioContext||window.webkitAudioContext)();const o=a.createOscillator();o.type='sine';o.frequency.value=ok?880:220;const g=a.createGain();g.gain.setValueAtTime(0.04,a.currentTime);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+0.12);}catch(e){} if(navigator.vibrate) navigator.vibrate(ok?[100]:[80,60,80]); };
+
 const refocusAfterAction=(clear=false)=>{ if(IS_DESKTOP){ if(clear){ inpBarcode.value=''; inpName.value=''; } inpBarcode.focus(); inpBarcode.select(); } };
 const fmtDMY=(d)=>{ try{const dt=(d instanceof Date)?d:new Date(d); if(isNaN(dt))return '—'; const dd=String(dt.getDate()).padStart(2,'0'); const mm=String(dt.getMonth()+1).padStart(2,'0'); const yy=dt.getFullYear(); return `${dd}/${mm}/${yy}`;}catch(_){ return '—'; }};
 const fromSci=(str)=>{const m=String(str).toLowerCase().match(/^(\d+(?:\.\d+)?)e\+(\d+)$/);if(!m) return String(str);const d=m[1].replace('.','');const dec=(m[1].split('.')[1]||'').length;const exp=+m[2];return d+'0'.repeat(Math.max(0,exp-dec));};
@@ -424,9 +476,9 @@ window.openProduct=function(p, source='manual'){
   const old=isOld(p); $('mOld').style.display=old?'block':'none';
   buildPreview(p);
 
-  mdl.classList.add('shown');
+  try{ window.__lastProduct=p; window.__lastIsOld=old; if (typeof playSound==="function") playSound("sndCart"); }catch(e){} mdl.classList.add('shown');
   mdl.querySelectorAll('[data-qty]').forEach(b=> b.onclick=()=> addToCart(p,parseInt(b.dataset.qty),old));
-  $('btnCustom').onclick=()=>{ const q=parseInt(prompt('Kaç adet?','1')); if(q>0) addToCart(p,q,old); };
+  $('btnCustom').onclick=()=>{ const q=parseInt(askAdet); if(q>0) addToCart(p,q,old); };
   $('btnCancel').onclick=()=>{ mdl.classList.remove('shown'); refocusAfterAction(true); };
 }
 
@@ -957,5 +1009,873 @@ $('btnCartPrint').onclick = ()=>{ $('mdlCart').classList.remove('shown'); direct
 
 })(); // IIFE end
 </script>
+
+<!-- Audio Unlock + Strong Beep/Haptic Helpers (non-breaking) -->
+<script>
+(function(){
+  try{
+    // 1) Ensure/resume AudioContext on first user gesture
+    if (!window.__audioInit) {
+      window.__audioInit = true;
+      window.A = window.A || new (window.AudioContext || window.webkitAudioContext)();
+      window.audioReady = false;
+
+      function ensureAudio(){
+        try{
+          if (!window.A) window.A = new (window.AudioContext || window.webkitAudioContext)();
+          if (window.A && window.A.state === 'suspended') window.A.resume();
+        }catch(e){}
+      }
+      window.ensureAudio = ensureAudio;
+
+      window.addEventListener('pointerdown', function onceUnlock(){
+        ensureAudio();
+        window.audioReady = true;
+      }, { once:true, passive:true });
+
+      document.addEventListener('visibilitychange', function(){
+        if (document.visibilityState === 'visible' && window.A && window.A.state === 'suspended'){
+          window.A.resume();
+        }
+      });
+    }
+
+    // 2) Strong beep (overrides existing if any, but keeps signature)
+    window.beep = function(ok=true){
+      try{
+        ensureAudio();
+        if (!window.audioReady) return; // require first user gesture
+        const a = window.A;
+        const o = a.createOscillator();
+        const g = a.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(ok ? 1200 : 420, a.currentTime);
+        // Higher gain but safe; clamp if too high
+        const gain = 0.25;
+        g.gain.setValueAtTime(gain, a.currentTime);
+        o.connect(g).connect(a.destination);
+        o.start();
+        o.stop(a.currentTime + 0.25);
+      }catch(e){ /* noop */ }
+    };
+
+    // 3) Haptic helper with iOS-safe fallback
+    window.strongHaptic = function(ok=true){
+      try{
+        const pattern = ok ? [180] : [220,80,220];
+        if (navigator.vibrate) {
+          navigator.vibrate(pattern);
+        } else {
+          // iOS: no vibrate; reinforce with a second beep only on failure
+          if (!ok) window.beep(false);
+        }
+      }catch(e){ /* noop */ }
+    };
+  }catch(e){ /* totally non-breaking */ }
+})();
+</script>
+
+
+<!-- 🔊 One-tap unlock UI -->
+<div id="soundUnlockToast" class="hidden">
+  <span>🔊 Sesleri etkinleştir</span>
+  <button id="btnUnlockAudio">Etkinleştir</button>
+</div>
+<script>
+(function(){
+  try{
+    // Show toast until unlocked once per device
+    function showToast(){ document.getElementById('soundUnlockToast')?.classList.remove('hidden'); }
+    function hideToast(){ document.getElementById('soundUnlockToast')?.classList.add('hidden'); }
+
+    const LS_KEY = 'dk_audio_unlocked_v1';
+    const wasUnlocked = localStorage.getItem(LS_KEY) === '1';
+
+    function unlockAndTest(){
+      try{
+        ensureAudio();
+        window.audioReady = true;
+        localStorage.setItem(LS_KEY,'1');
+        hideToast();
+        // test pings: success+error to confirm
+        if (typeof window.beep==='function'){ window.beep(true); setTimeout(()=>window.beep(false), 220); }
+        if (typeof window.strongHaptic==='function'){ window.strongHaptic(true); setTimeout(()=>window.strongHaptic(false), 220); }
+      }catch(e){}
+    }
+
+    // If not unlocked yet, present toast after load
+    window.addEventListener('load', function(){
+      if (!wasUnlocked){
+        showToast();
+      }
+    });
+
+    document.addEventListener('click', function(e){
+      if (e.target && e.target.id === 'btnUnlockAudio'){
+        unlockAndTest();
+      }
+    }, true);
+
+    // Also auto-unlock on first pointerdown if user ignores the button
+    window.addEventListener('pointerdown', function(){
+      if (!localStorage.getItem(LS_KEY)){
+        try{ ensureAudio(); window.audioReady = true; localStorage.setItem(LS_KEY,'1'); hideToast(); }catch(e){}
+      }
+    }, { once:true, passive:true });
+  }catch(e){}
+})();
+</script>
+
+
+<script>
+// === Audio + Haptic Signals using external MP3s ===
+function playSound(id){
+  try{
+    const el = document.getElementById(id);
+    if(el){ el.currentTime = 0; el.play().catch(()=>{}); }
+  }catch(e){}
+}
+
+function onMatch(){
+  playSound('sndMatch');
+  if (window.strongHaptic) strongHaptic(true);
+}
+
+function onCartAdd(){
+  playSound('sndCart');
+  if (window.strongHaptic) strongHaptic(true);
+}
+
+function onFail(){
+  playSound('sndFail');
+  if (window.strongHaptic) strongHaptic(false);
+}
+
+// Bind to common function names / events
+(function(){
+  function wrapIf(fnName, beforeCb){
+    try{
+      const fn = window[fnName];
+      if (typeof fn === 'function' && !fn.__wrappedAudio){
+        window[fnName] = function(){
+          try{ beforeCb && beforeCb.apply(this, arguments); }catch(_){}
+          return fn.apply(this, arguments);
+        };
+        window[fnName].__wrappedAudio = true;
+      }
+    }catch(e){}
+  }
+
+  ['onProductMatched','handleMatch','matchFound','urunEslesti','scanSuccess']
+    .forEach(n=>wrapIf(n, onMatch));
+  ['addToCart','addCart','sepeteEkle','urunSepeteEkle','handleAddToCart']
+    .forEach(n=>wrapIf(n, onCartAdd));
+  ['onScanFail','handleScanFail','scanFail','notFound','urunBulunamadi']
+    .forEach(n=>wrapIf(n, onFail));
+
+  // Event listeners fallback
+  window.addEventListener('product:matched', ()=>onMatch(), true);
+  window.addEventListener('cart:added', ()=>onCartAdd(), true);
+  window.addEventListener('product:notfound', ()=>onFail(), true);
+})();
+</script>
+
+
+<!-- 🔢 Custom Numeric Modal for +Adet -->
+<div id="adetModal" style="display:none;position:fixed;z-index:9999;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;">
+  <div style="background:#fff;padding:20px;border-radius:12px;max-width:300px;width:80%;text-align:center;">
+    <h3 style="margin-top:0;">Kaç adet?</h3>
+    <input id="adetInput" type="tel" inputmode="numeric" pattern="[0-9]*" style="width:100%;padding:10px;font-size:18px;text-align:center;" />
+    <div style="margin-top:15px;display:flex;gap:10px;justify-content:center;">
+      <button id="adetCancel" style="padding:10px 20px;border:none;border-radius:8px;background:#ccc;">İptal</button>
+      <button id="adetOk" style="padding:10px 20px;border:none;border-radius:8px;background:#00c853;color:#fff;">Tamam</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// === Override beep() with MP3 ===
+function playSound(id){
+  try{
+    const el = document.getElementById(id);
+    if(el){ el.currentTime = 0; el.play().catch(()=>{}); }
+  }catch(e){}
+}
+
+window.beep = function(ok=true){
+  if(ok===true){ playSound('sndMatch'); if(window.strongHaptic) strongHaptic(true); }
+  else if(ok===false){ playSound('sndFail'); if(window.strongHaptic) strongHaptic(false); }
+};
+
+(function(){
+  function wrapIf(fnName, cb){
+    try{
+      const fn = window[fnName];
+      if(typeof fn==='function' && !fn.__wrappedCartAudio){
+        window[fnName] = function(){
+          try{ cb && cb.apply(this, arguments); }catch(_){}
+          return fn.apply(this, arguments);
+        };
+        window[fnName].__wrappedCartAudio = true;
+      }
+    }catch(e){}
+  }
+  ['addToCart','addCart','sepeteEkle','urunSepeteEkle','handleAddToCart']
+    .forEach(n=>wrapIf(n, ()=>playSound('sndCart')));
+})();
+
+// === Replace askAdet with custom modal ===
+window.askAdet = function(callback){
+  const modal = document.getElementById('adetModal');
+  const input = document.getElementById('adetInput');
+  const btnOk = document.getElementById('adetOk');
+  const btnCancel = document.getElementById('adetCancel');
+  modal.style.display='flex';
+  input.value='';
+  setTimeout(()=>{ input.focus(); }, 50);
+
+  function close(){
+    modal.style.display='none';
+    btnOk.onclick=null; btnCancel.onclick=null;
+  }
+
+  btnOk.onclick=function(){
+    const val = (input.value||"").trim();
+    close();
+    // 1) Eğer ürün popup'ından geldiysek: otomatik sepete ekle + sesi çal + kamerayı aç
+    const qty = parseInt(val||'0', 10);
+    const p = window.__lastProduct || null;
+    const old = !!window.__lastIsOld;
+    if (qty>0 && p && typeof window.addToCart==='function'){
+      try{
+        window.addToCart(p, qty, old);
+        if (typeof playSound==='function') playSound('sndCart');
+      }catch(_){}
+      // Ürün popup'ını kapat
+      try{ const mdl = document.getElementById('mdlProduct'); if (mdl) mdl.classList.remove('shown'); }catch(_){}
+      // Kamerayı tekrar aç
+      try{ if (typeof refocusAfterAction==='function') refocusAfterAction(true); }catch(_){}
+    }
+    // 2) İsteğe bağlı: eski callback'e de sonucu geç
+    if (typeof callback === 'function') { callback(val); }
+  };
+
+  btnCancel.onclick=function(){
+    close();
+    // Kamerayı tekrar aç (iptalde de vakit kaybetmeyelim)
+    try{ if (typeof refocusAfterAction==='function') refocusAfterAction(true); }catch(_){}
+    if (typeof callback === 'function') { callback(null); }
+  };
+};
+  btnCancel.onclick=function(){ close(); callback(null); };
+};
+</script>
+
+
+<!-- 🔢 Custom Numeric Modal for +Adet -->
+<div id="adetModal" style="display:none;position:fixed;z-index:9999;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;">
+  <div style="background:#fff;padding:20px;border-radius:12px;max-width:300px;width:80%;text-align:center;">
+    <h3 style="margin-top:0;">Kaç adet?</h3>
+    <input id="adetInput" type="tel" inputmode="numeric" pattern="[0-9]*" style="width:100%;padding:10px;font-size:18px;text-align:center;" />
+    <div style="margin-top:15px;display:flex;gap:10px;justify-content:center;">
+      <button id="adetCancel" style="padding:10px 20px;border:none;border-radius:8px;background:#ccc;">İptal</button>
+      <button id="adetOk" style="padding:10px 20px;border:none;border-radius:8px;background:#00c853;color:#fff;">Tamam</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function playSound(id){
+  try{
+    const el=document.getElementById(id);
+    if(el){ el.currentTime=0; el.play().catch(()=>{}); }
+  }catch(e){}
+}
+
+// Override beep()
+window.beep=function(ok){
+  if(ok===true){ playSound('sndMatch'); if(window.strongHaptic) strongHaptic(true); }
+  else if(ok===false){ playSound('sndFail'); if(window.strongHaptic) strongHaptic(false); }
+  else { playSound('sndCart'); if(window.strongHaptic) strongHaptic(true); }
+};
+
+// Replace prompt with modal
+window.askAdet = function(callback){
+  const modal = document.getElementById('adetModal');
+  const input = document.getElementById('adetInput');
+  const btnOk = document.getElementById('adetOk');
+  const btnCancel = document.getElementById('adetCancel');
+  modal.style.display='flex';
+  input.value='';
+  setTimeout(()=>{ input.focus(); }, 50);
+
+  function close(){
+    modal.style.display='none';
+    btnOk.onclick=null; btnCancel.onclick=null;
+  }
+
+  btnOk.onclick=function(){
+    const val = (input.value||"").trim();
+    close();
+    // 1) Eğer ürün popup'ından geldiysek: otomatik sepete ekle + sesi çal + kamerayı aç
+    const qty = parseInt(val||'0', 10);
+    const p = window.__lastProduct || null;
+    const old = !!window.__lastIsOld;
+    if (qty>0 && p && typeof window.addToCart==='function'){
+      try{
+        window.addToCart(p, qty, old);
+        if (typeof playSound==='function') playSound('sndCart');
+      }catch(_){}
+      // Ürün popup'ını kapat
+      try{ const mdl = document.getElementById('mdlProduct'); if (mdl) mdl.classList.remove('shown'); }catch(_){}
+      // Kamerayı tekrar aç
+      try{ if (typeof refocusAfterAction==='function') refocusAfterAction(true); }catch(_){}
+    }
+    // 2) İsteğe bağlı: eski callback'e de sonucu geç
+    if (typeof callback === 'function') { callback(val); }
+  };
+
+  btnCancel.onclick=function(){
+    close();
+    // Kamerayı tekrar aç (iptalde de vakit kaybetmeyelim)
+    try{ if (typeof refocusAfterAction==='function') refocusAfterAction(true); }catch(_){}
+    if (typeof callback === 'function') { callback(null); }
+  };
+};
+  btnCancel.onclick=function(){close();callback(null);};
+};
+</script>
+
+
+<!-- ❌ Not Found Modal -->
+<div id="mdlNotFound" class="modal" style="display:none;align-items:center;justify-content:center;">
+  <div class="box" style="text-align:center">
+    <h3>Ürün bulunamadı</h3>
+    <p>Okuttuğunuz ürün sistemde yok.</p>
+    <div class="actions" style="justify-content:center">
+      <button id="notFoundOk" class="btn">Tamam</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Show/hide not found modal
+  function showNotFound(){
+    try{
+      const m = document.getElementById('mdlNotFound');
+      if(!m) return;
+      m.style.display='flex';
+      document.getElementById('notFoundOk').onclick = function(){
+        m.style.display='none';
+        if (typeof refocusAfterAction === 'function') refocusAfterAction(true);
+      };
+    }catch(_){}
+  }
+
+  // Wrap findProduct to play fail sound + show modal when not found
+  try{
+    if (typeof window.findProduct === 'function' && !window.findProduct.__wrappedNF){
+      const __origFind = window.findProduct;
+      window.findProduct = function(code){
+        const res = __origFind.apply(this, arguments);
+        if (!res) {
+          if (typeof playSound === 'function') playSound('sndFail');
+          showNotFound();
+        }
+        return res;
+      };
+      window.findProduct.__wrappedNF = true;
+    }
+  }catch(_){}
+
+  // Ensure btnCustom uses askAdet modal
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('#btnCustom');
+    if(btn){
+      e.preventDefault(); e.stopImmediatePropagation();
+      const p = window.__lastProduct || null;
+      const old = (document.getElementById('mOld')?.style.display === 'block');
+      if (typeof askAdet === 'function'){
+        askAdet(function(val){
+          const q = parseInt(val||'1', 10);
+          if (q>0 && typeof window.addToCart === 'function' && p){
+            window.addToCart(p, q, !!old);
+          }
+        });
+      }
+    }
+  }, true);
+})();
+</script>
+
+
+<script>
+// === Fix wiring ===
+(function(){
+  // 1) Old Price warning proceed id is btnOldContinue (not btnOldProceed)
+  try{
+    const warn = $('mdlOldWarn');
+    const btnCancel = $('btnOldCancel');
+    const btnGo = $('btnOldContinue');
+    if (btnCancel && warn){
+      btnCancel.onclick = function(){
+        try{
+          warn.classList.remove('shown');
+          if (typeof IS_PRINTING !== 'undefined') IS_PRINTING = false;
+          const btn = $('btnCartPrint'); if (btn) btn.disabled = false;
+        }catch(_){}
+      };
+    }
+    if (btnGo && warn){
+      btnGo.onclick = function(){
+        try{
+          warn.classList.remove('shown');
+          const btnOldSave = $('btnPdfOldSave');
+          if (btnOldSave){
+            const mdlOld = $('mdlPdfOld');
+            if (mdlOld) mdlOld.classList.add('shown');
+            btnOldSave.click();
+          } else {
+            const btnSave = $('btnPdfSave');
+            if (btnSave) btnSave.click();
+          }
+        }catch(_){}
+      };
+    }
+  }catch(_){}
+
+  // 2) Ensure Özel button opens numeric modal and proceeds
+  try{
+    const btnCustom = $('btnCustom');
+    if (btnCustom){
+      btnCustom.onclick = function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof askAdet === 'function'){
+          askAdet(function(val){
+            const q = parseInt((val||'').trim(),10);
+            const p = window.__lastProduct || null;
+            const old = !!window.__lastIsOld;
+            if (q>0 && p && typeof addToCart==='function'){
+              addToCart(p, q, old);
+              if (typeof playSound==='function') playSound('sndCart');
+              try{ const mdl = $('mdlProduct'); if (mdl) mdl.classList.remove('shown'); }catch(_){}
+              try{ if (typeof refocusAfterAction==='function') refocusAfterAction(true); }catch(_){}
+            }
+          });
+        }
+      };
+    }
+  }catch(_){}
+
+  // 3) Numeric modal: submit on Enter/Done
+  try{
+    const input = document.getElementById('adetInput');
+    const ok = document.getElementById('adetOk');
+    if (input && ok){
+      input.addEventListener('keydown', function(e){
+        if (e.key === 'Enter'){
+          e.preventDefault();
+          ok.click();
+        }
+      });
+    }
+  }catch(_){}
+})();
+</script>
+
+
+<script>
+// Robust wiring for "Eski Fiyat Uyarısı" modal (no $ dependency)
+(function(){
+  try{
+    const $id = (x)=>document.getElementById(x);
+    const warn = $id('mdlOldWarn');
+    if (!warn) return;
+
+    let btnCancel = $id('btnOldCancel');
+    let btnGo = $id('btnOldContinue');
+
+    // Ensure buttons exist
+    if (!btnCancel || !btnGo) return;
+
+    function closeWarn(){
+      warn.classList.remove('shown');
+      warn.style.display = 'none';
+      try{
+        if (typeof IS_PRINTING !== 'undefined') IS_PRINTING = false;
+        const btn = $id('btnCartPrint') || $id('btnPrint');
+        if (btn) btn.disabled = false;
+      }catch(_){}
+    }
+
+    // Remove existing listeners by replacing with clones (avoids duplicate handlers)
+    function resetNode(el){
+      if (!el || !el.parentNode) return el;
+      const c = el.cloneNode(true);
+      el.parentNode.replaceChild(c, el);
+      return c;
+    }
+    btnCancel = resetNode(btnCancel);
+    btnGo = resetNode(btnGo);
+
+    btnCancel.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      closeWarn();
+    }, true);
+
+    btnGo.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      // Kick off PDF flow reliably
+      const oldSave = $id('btnPdfOldSave');
+      const oldMdl = $id('mdlPdfOld');
+      if (oldMdl) oldMdl.classList.add('shown');
+      if (oldSave) {
+        oldSave.click();
+      } else {
+        const save = $id('btnPdfSave');
+        if (save) save.click();
+      }
+      closeWarn();
+    }, true);
+
+    // Overlay click closes
+    warn.addEventListener('click', function(e){
+      if (e.target === warn) closeWarn();
+    }, true);
+
+    // ESC closes
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' && warn.classList.contains('shown')) closeWarn();
+    });
+  }catch(_){}
+})();
+</script>
+
 </body>
 </html>
+
+<script>
+(function(){
+  function installInlineAdder(btn){
+    if (!btn || btn.__patchedInline) return;
+    btn.__patchedInline = true;
+    btn.style.display = 'none';
+
+    var wrap = document.createElement('span');
+    wrap.style.display = 'inline-flex';
+    wrap.style.alignItems = 'center';
+    wrap.style.gap = '8px';
+    wrap.style.marginLeft = '6px';
+
+    var inp = document.createElement('input');
+    inp.id = 'qtyCustomInline';
+    inp.type = 'tel';
+    inp.setAttribute('inputmode','numeric');
+    inp.setAttribute('pattern','[0-9]*');
+    inp.placeholder = 'Adet';
+    inp.style.width = '80px';
+    inp.style.textAlign = 'center';
+    inp.style.padding = '8px 10px';
+    inp.style.fontSize = '16px';
+    inp.style.border = '1px solid #ccc';
+    inp.style.borderRadius = '10px';
+
+    var plus = document.createElement('button');
+    plus.className = 'btn';
+    plus.id = 'btnInlineAdd';
+    plus.textContent = '+';
+
+    var confirm = document.createElement('button');
+    confirm.className = 'btn';
+    confirm.id = 'btnInlineConfirm';
+    confirm.textContent = 'Onayla';
+    confirm.style.background = '#28a745';
+    confirm.style.color = '#fff';
+    confirm.style.fontWeight = '600';
+
+    wrap.appendChild(inp);
+    wrap.appendChild(plus);
+    wrap.appendChild(confirm);
+    btn.parentNode.insertBefore(wrap, btn.nextSibling);
+
+    function onlyDigits(s){ return (s||'').replace(/[^\d]/g,''); }
+    function parseQty(){ return parseInt(onlyDigits(inp && inp.value), 10) || 0; }
+    function safeAdd(q){
+      try{
+        var p = window.__lastProduct || null;
+        var old = !!window.__lastIsOld;
+        if (q>0 && p && typeof window.addToCart==='function'){
+          window.addToCart(p, q, old);
+          try{ if (typeof playSound==='function') playSound('sndCart'); }catch(_){}
+          try{ var mdl=document.getElementById('mdlProduct'); if(mdl) mdl.classList.remove('shown'); }catch(_){}
+          try{ if (typeof refocusAfterAction==='function') refocusAfterAction(true); }catch(_){}
+        }
+      }catch(_){}
+    }
+
+    inp.addEventListener('input', function(){ this.value = onlyDigits(this.value); }, true);
+    inp.addEventListener('keydown', function(e){
+      if (e.key === 'Enter'){ e.preventDefault(); safeAdd(parseQty()); }
+    }, true);
+
+    plus.addEventListener('click', function(e){ e.preventDefault(); safeAdd(parseQty()); }, true);
+    confirm.addEventListener('click', function(e){ e.preventDefault(); safeAdd(parseQty()); }, true);
+  }
+
+  function tryPatch(){ var b=document.getElementById('btnCustom'); if (b) installInlineAdder(b); }
+  document.addEventListener('DOMContentLoaded', tryPatch);
+  var obs=new MutationObserver(function(){ tryPatch(); });
+  obs.observe(document.documentElement||document.body,{childList:true,subtree:true});
+})();
+</script>
+
+<script>
+// Runtime replacement for "Özel" button -> "+ [adet kutusu]"
+(function(){
+  function installInlineAdder(btn){
+    if (!btn || btn.__patchedInline) return;
+    btn.__patchedInline = true;
+    // Hide original "Özel" button
+    btn.style.display = 'none';
+
+    // Build inline controls
+    var wrap = document.createElement('span');
+    wrap.style.display = 'inline-flex';
+    wrap.style.alignItems = 'center';
+    wrap.style.gap = '8px';
+    wrap.style.marginLeft = '6px';
+
+    var plus = document.createElement('button');
+    plus.className = 'btn';
+    plus.id = 'btnInlineAdd';
+    plus.textContent = '+';
+    plus.style.padding = '8px 12px';
+    plus.style.fontWeight = '700';
+
+    var inp = document.createElement('input');
+    inp.id = 'qtyCustomInline';
+    inp.type = 'tel';
+    inp.setAttribute('inputmode', 'numeric');
+    inp.setAttribute('pattern', '[0-9]*');
+    inp.placeholder = 'Adet';
+    inp.style.width = '100px';
+    inp.style.textAlign = 'center';
+    inp.style.padding = '8px 10px';
+    inp.style.fontSize = '16px';
+    inp.style.border = '1px solid #ccc';
+    inp.style.borderRadius = '10px';
+
+    wrap.appendChild(plus);
+    wrap.appendChild(inp);
+    // Insert after the old button
+    btn.parentNode.insertBefore(wrap, btn.nextSibling);
+
+    function onlyDigits(s){ return (s||'').replace(/[^\d]/g,''); }
+    function parseQty(){ return parseInt(onlyDigits(inp && inp.value), 10) || 0; }
+    function safeAdd(q){
+      try{
+        var p = window.__lastProduct || null;
+        var old = !!window.__lastIsOld;
+        if (q>0 && p && typeof window.addToCart==='function'){
+          window.addToCart(p, q, old);
+          try{ if (typeof playSound==='function') playSound('sndCart'); }catch(_){}
+          try{ var mdl=document.getElementById('mdlProduct'); if(mdl) mdl.classList.remove('shown'); }catch(_){}
+          try{ if (typeof refocusAfterAction==='function') refocusAfterAction(true); }catch(_){}
+        }
+      }catch(_){}
+    }
+
+    inp.addEventListener('input', function(){ this.value = onlyDigits(this.value); }, true);
+    inp.addEventListener('focus', function(){ try{ this.select(); }catch(_){} }, true);
+    inp.addEventListener('keydown', function(e){
+      if (e.key === 'Enter'){
+        e.preventDefault();
+        safeAdd(parseQty());
+      }
+    }, true);
+
+    plus.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      safeAdd(parseQty());
+    }, true);
+  }
+
+  // Try immediately
+  function tryPatch(){ var b=document.getElementById('btnCustom'); if (b) installInlineAdder(b); }
+  document.addEventListener('DOMContentLoaded', tryPatch);
+
+  // Observe for modal/content updates (e.g., popup açıldığında buton ekleniyorsa)
+  var obs = new MutationObserver(function(){
+    tryPatch();
+  });
+  obs.observe(document.documentElement || document.body, { childList: true, subtree: true });
+})();
+</script>
+
+<script>
+// STRONG OVERRIDE: wire inline onclick on the injected buttons so nothing can block them.
+(function(){
+  function install(){
+    var wrapBtn = document.getElementById('btnCustom');
+    if (!wrapBtn) return;
+
+    // If our inline controls already exist, hard-wire their onclicks
+    var plus = document.getElementById('btnInlineAdd');
+    var confirm = document.getElementById('btnInlineConfirm');
+    var input = document.getElementById('qtyCustomInline');
+
+    function onlyDigits(s){ return (s||'').replace(/[^\d]/g,''); }
+    function parseQty(){ return parseInt(onlyDigits(input && input.value), 10) || 0; }
+    function safeAdd(q){
+      try{
+        var p = window.__lastProduct || null;
+        var old = !!window.__lastIsOld;
+        if (q>0 && p && typeof window.addToCart==='function'){
+          window.addToCart(p, q, old);
+          try{ if (typeof playSound==='function') playSound('sndCart'); }catch(_){}
+          try{ var mdl=document.getElementById('mdlProduct'); if(mdl) mdl.classList.remove('shown'); }catch(_){}
+          try{ if (typeof refocusAfterAction==='function') refocusAfterAction(true); }catch(_){}
+        }
+      }catch(_){}
+    }
+
+    if (input){
+      input.style.pointerEvents = 'auto';
+      input.onkeydown = function(e){ if(e.key==='Enter'){ e.preventDefault(); safeAdd(parseQty()); return false; } };
+    }
+
+    if (plus){
+      plus.setAttribute('type','button');
+      plus.style.pointerEvents = 'auto';
+      plus.onclick = function(e){ if(e){e.preventDefault(); e.stopPropagation();} safeAdd(parseQty()); return false; };
+    }
+
+    if (confirm){
+      confirm.setAttribute('type','button');
+      confirm.style.pointerEvents = 'auto';
+      // Force highest z-index in the row to avoid overlay swallowing clicks
+      confirm.style.zIndex = 99999;
+      confirm.onclick = function(e){ if(e){e.preventDefault(); e.stopPropagation();} safeAdd(parseQty()); return false; };
+    }
+  }
+
+  // Try now and whenever DOM changes
+  document.addEventListener('DOMContentLoaded', install);
+  var obs = new MutationObserver(install);
+  obs.observe(document.documentElement||document.body, {childList:true, subtree:true});
+})();
+</script>
+
+<script>
+(function(){
+  const CAP_OPTS = { capture: true, passive: false };
+  function onlyDigits(s){ return (s||'').replace(/[^\d]/g,''); }
+
+  function ensureInlineControls(){
+    try{
+      const modal = document.getElementById('mdlProduct');
+      if (!modal) return;
+      const actions = modal.querySelector('.actions');
+      if (!actions) return;
+
+      const oldCustom = actions.querySelector('#btnCustom');
+      if (oldCustom) oldCustom.style.display = 'none';
+
+      if (actions.querySelector('#qtyCustomInline')) return;
+
+      const wrap = document.createElement('span');
+      wrap.style.display='inline-flex';
+      wrap.style.alignItems='center';
+      wrap.style.gap='8px';
+      wrap.style.marginLeft='6px';
+
+      const inp = document.createElement('input');
+      inp.id='qtyCustomInline';
+      inp.type='tel';
+      inp.setAttribute('inputmode','numeric');
+      inp.setAttribute('pattern','[0-9]*');
+      inp.placeholder='Adet';
+      inp.style.width='84px';
+      inp.style.textAlign='center';
+      inp.style.padding='8px 10px';
+      inp.style.fontSize='16px';
+      inp.style.border='1px solid #ccc';
+      inp.style.borderRadius='10px';
+
+      const plus = document.createElement('button');
+      plus.className='btn';
+      plus.id='btnInlineAdd';
+      plus.type='button';
+      plus.textContent='+';
+
+      const ok = document.createElement('button');
+      ok.className='btn';
+      ok.id='btnInlineConfirm';
+      ok.type='button';
+      ok.textContent='Onayla';
+      ok.style.background='#28a745';
+      ok.style.color='#fff';
+      ok.style.fontWeight='600';
+
+      wrap.appendChild(plus);
+      wrap.appendChild(inp);
+      wrap.appendChild(ok);
+
+      const oneBtn = actions.querySelector('#btnQty1') || actions.firstElementChild;
+      if (oneBtn && oneBtn.nextSibling){
+        actions.insertBefore(wrap, oneBtn.nextSibling);
+      } else {
+        actions.appendChild(wrap);
+      }
+
+      setTimeout(()=>{try{inp.focus();inp.select();}catch(_){}} ,50);
+    }catch(_){}
+  }
+
+  function safeAddFromInput(){
+    try{
+      const inp = document.getElementById('qtyCustomInline');
+      const q = parseInt(onlyDigits(inp && inp.value),10) || 0;
+      const p = window.__lastProduct || null;
+      const old = !!window.__lastIsOld;
+      if (q>0 && p && typeof window.addToCart==='function'){
+        window.addToCart(p, q, old);
+        try{ if (typeof playSound==='function') playSound('sndCart'); }catch(_){}
+        try{ const mdl = document.getElementById('mdlProduct'); if (mdl) mdl.classList.remove('shown'); }catch(_){}
+        try{ if (typeof refocusAfterAction==='function') refocusAfterAction(true); }catch(_){}
+      }
+    }catch(_){}
+  }
+
+  document.addEventListener('click', function(ev){
+    const t = ev.target;
+    if (!t) return;
+    if (t.id === 'btnInlineAdd' || t.id === 'btnInlineConfirm'){
+      ev.preventDefault(); ev.stopPropagation();
+      safeAddFromInput();
+    }
+  }, CAP_OPTS);
+
+  document.addEventListener('keydown', function(ev){
+    const t = ev.target;
+    if (!t) return;
+    if (t.id === 'qtyCustomInline' && ev.key === 'Enter'){
+      ev.preventDefault(); ev.stopPropagation();
+      safeAddFromInput();
+    }
+  }, CAP_OPTS);
+
+  document.addEventListener('input', function(ev){
+    const t = ev.target;
+    if (t && t.id === 'qtyCustomInline'){
+      t.value = onlyDigits(t.value);
+    }
+  }, CAP_OPTS);
+
+  document.addEventListener('DOMContentLoaded', ensureInlineControls);
+  const obs = new MutationObserver(ensureInlineControls);
+  obs.observe(document.documentElement || document.body, { childList:true, subtree:true });
+})();
+</script>
